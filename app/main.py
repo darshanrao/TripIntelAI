@@ -23,6 +23,9 @@ from app.nodes.planner_node import planner_node
 from app.nodes.agent_nodes import flights_node, places_node, restaurants_node, hotel_node, budget_node, reviews_node, route_node
 from app.nodes.summary_node import summary_node
 
+# Import our flight booking router
+from app.api.flight_booking import router as flight_booking_router
+
 app = FastAPI(title="AI Travel Planner")
 
 app.add_middleware(
@@ -42,6 +45,9 @@ conversation_states = {}
 # Create a dedicated audio directory
 AUDIO_DIR = Path("audio_files")
 AUDIO_DIR.mkdir(exist_ok=True)
+
+# Include the flight booking router
+app.include_router(flight_booking_router)
 
 class ChatRequest(BaseModel):
     """Request model for chat-based interactions."""

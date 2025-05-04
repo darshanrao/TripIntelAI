@@ -522,6 +522,86 @@ def generate_readable_itinerary(itinerary_data: Dict[str, Any], state: GraphStat
         print(traceback.format_exc())
         return f"There was an error formatting your itinerary. Raw data:\n\n{str(itinerary_data)[:1000]}..."
 
+async def add_coordinates_to_itinerary(itinerary_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Add latitude and longitude coordinates to places in the itinerary.
+    
+    Args:
+        itinerary_data: The generated itinerary
+        
+    Returns:
+        Updated itinerary with coordinates
+    """
+    if not isinstance(itinerary_data, dict):
+        return itinerary_data
+    
+    try:
+        # Initialize the LocationCoordinates class
+        location_service = LocationCoordinates()
+        
+        # Collect all unique places to get coordinates for
+        places_to_geocode = set()
+        
+        # Extract places from daily itinerary
+        if "daily_itinerary" in itinerary_data:
+            for day_key, day_data in itinerary_data["daily_itinerary"].items():
+                if "activities" in day_data:
+                    for activity in day_data["activities"]:
+                        if "details" in activity:
+                            # For attractions and dining, we need coordinates
+                            if activity["type"] in ["attraction", "dining", "accommodation"]:
+                                # Try to get location from different fields
+                                location = None
+                                if "location" in activity["details"]:
+                                    location = activity["details"]["location"]
+                                elif "name" in activity["details"]:
+                                    location = activity["details"]["name"]
+                                
+                                if location:
+                                    places_to_geocode.add(location)
+        
+        print(f"Places to geocode: {places_to_geocode}")
+        
+        # Get coordinates for all places
+        coordinates_cache = {}
+        for place_name in places_to_geocode:
+            print(f"Getting coordinates for: {place_name}")
+            coords = await location_service.get_coordinates(place_name)
+            if coords:
+                print(f"Found coordinates for {place_name}: {coords}")
+                coordinates_cache[place_name] = coords
+            else:
+                print(f"Failed to get coordinates for: {place_name}")
+        
+        # Add coordinates to activities
+        if "daily_itinerary" in itinerary_data:
+            for day_key, day_data in itinerary_data["daily_itinerary"].items():
+                if "activities" in day_data:
+                    for activity in day_data["activities"]:
+                        if "details" in activity:
+                            # Check for location or name match
+                            matched_place = None
+                            
+                            if "location" in activity["details"] and activity["details"]["location"] in coordinates_cache:
+                                matched_place = activity["details"]["location"]
+                            elif "name" in activity["details"] and activity["details"]["name"] in coordinates_cache:
+                                matched_place = activity["details"]["name"]
+                            
+                            if matched_place:
+                                coords = coordinates_cache[matched_place]
+                                # Add coordinates directly to details
+                                activity["details"]["latitude"] = coords["lat"]
+                                activity["details"]["longitude"] = coords["lon"]
+                                print(f"Added coordinates to {matched_place}: Lat={coords['lat']}, Lon={coords['lon']}")
+        
+        return itinerary_data
+        
+    except Exception as e:
+        import traceback
+        print(f"Error adding coordinates to itinerary: {str(e)}")
+        print(traceback.format_exc())
+        return itinerary_data
+
 async def summary_node(state: GraphState) -> GraphState:
     """
     Generate a detailed itinerary based on all the collected information.
@@ -658,14 +738,42 @@ async def summary_node(state: GraphState) -> GraphState:
             itinerary_data = merge_review_insights(itinerary_data, state)
             print("Successfully merged review insights")
             
-            # Generate human-readable itinerary text
-            print("Generating readable itinerary...")
-            itinerary_text = generate_readable_itinerary(itinerary_data, state)
-            print("Successfully generated readable itinerary")
+            # Add coordinates to places in the itinerary
+            print("Adding coordinates to places in the itinerary...")
+            itinerary_data = await add_coordinates_to_itinerary(itinerary_data)
+            print("Successfully added coordinates")
             
-            # Add to state
-            state["itinerary"] = itinerary_text
-            print("Added itinerary to state")
+            # Print full JSON result
+            print("\nComplete itinerary JSON:")
+            print(json.dumps(itinerary_data, indent=2, default=datetime_to_str))
+            
+            # Ask user if they want to modify the itinerary
+            print("\n" + "-" * 80)
+            user_response = input("Would you like to modify any aspect of this itinerary? (y/n): ")
+            if user_response.lower() != 'y':
+                print("\nFull itinerary JSON with latitude and longitude:")
+                print(json.dumps(itinerary_data, indent=2, default=datetime_to_str))
+                
+                # Print a summary of coordinates added
+                print("\nLocation Coordinates Summary:")
+                print("-" * 40)
+                for day_key, day_data in itinerary_data["daily_itinerary"].items():
+                    if "activities" in day_data:
+                        for activity in day_data["activities"]:
+                            if "details" in activity:
+                                details = activity["details"]
+                                name = details.get("name", "")
+                                location = details.get("location", "")
+                                lat = details.get("latitude")
+                                lon = details.get("longitude")
+                                
+                                if lat and lon:
+                                    place = name or location
+                                    print(f"{place}: Latitude={lat}, Longitude={lon}")
+            
+            # Add JSON directly to state instead of converting to readable format
+            state["itinerary"] = itinerary_data
+            print("Added itinerary JSON to state")
             
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {str(e)}")
