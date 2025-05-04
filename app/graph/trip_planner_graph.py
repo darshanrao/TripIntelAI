@@ -9,6 +9,7 @@ from app.nodes.agent_nodes import (
     flights_node, route_node, places_node, restaurants_node, 
     hotel_node, budget_node, reviews_node
 )
+from app.nodes.flight_selection_node import flight_selection_node
 from app.nodes.summary_node import summary_node
 
 class GraphState(TypedDict, total=False):
@@ -21,6 +22,7 @@ class GraphState(TypedDict, total=False):
     error: Optional[str]
     nodes_to_call: List[str]
     flights: List[Dict[str, Any]]
+    selected_flights: List[Dict[str, Any]]
     route: Dict[str, Any]
     places: List[Dict[str, Any]]
     restaurants: List[Dict[str, Any]]
@@ -86,6 +88,7 @@ class TripPlannerGraph:
         
         # Add agent nodes
         workflow.add_node("flights", flights_node)
+        workflow.add_node("flight_selection", flight_selection_node)
         workflow.add_node("route", route_node)
         workflow.add_node("places", places_node)
         workflow.add_node("restaurants", restaurants_node)
@@ -120,17 +123,27 @@ class TripPlannerGraph:
         
         # Dynamic routing based on planner output
         for node_name in ["flights", "route", "places", "restaurants", "hotel", "budget"]:
-            workflow.add_conditional_edges(
-                "planner",
-                lambda state, node=node_name: node if node in state.get("nodes_to_call", []) else None,
-                {
-                    node_name: node_name,
-                    None: "reviews"  # If node not needed, go to reviews
-                }
-            )
-            
-            # After each agent node, go to reviews
-            workflow.add_edge(node_name, "reviews")
+            if node_name == "flights":
+                workflow.add_conditional_edges(
+                    "planner",
+                    lambda state, node=node_name: node if node in state.get("nodes_to_call", []) else None,
+                    {
+                        node_name: node_name,
+                        None: "reviews"
+                    }
+                )
+                workflow.add_edge("flights", "flight_selection")
+                workflow.add_edge("flight_selection", "reviews")
+            else:
+                workflow.add_conditional_edges(
+                    "planner",
+                    lambda state, node=node_name: node if node in state.get("nodes_to_call", []) else None,
+                    {
+                        node_name: node_name,
+                        None: "reviews"
+                    }
+                )
+                workflow.add_edge(node_name, "reviews")
         
         # After reviews, go to summary
         workflow.add_edge("reviews", "summary")
@@ -189,6 +202,7 @@ class TripPlannerGraph:
             "raw_query": query,
             # Explicitly initialize empty values for agent node keys to avoid conflicts
             "flights": [],
+            "selected_flights": [],
             "route": {},
             "places": [],
             "restaurants": [],

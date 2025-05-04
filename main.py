@@ -4,6 +4,7 @@ import time
 import threading
 from dotenv import load_dotenv
 import logging
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -16,6 +17,7 @@ from app.nodes.intent_parser_node import intent_parser_node
 from app.nodes.trip_validator_node import trip_validator_node
 from app.nodes.planner_node import planner_node
 from app.nodes.agent_nodes import flights_node, places_node, restaurants_node, hotel_node, budget_node, reviews_node
+from app.nodes.flight_selection_node import display_flight_options, get_user_flight_selection
 from app.nodes.summary_node import summary_node
 
 # Load environment variables
@@ -107,29 +109,60 @@ async def process_travel_query(query, spinner):
     nodes_to_call = state.get('nodes_to_call', [])
     logger.info(f"Nodes to call: {nodes_to_call}")
     
+    # Initialize selected_flights in state
+    state["selected_flights"] = []
+    
     if 'flights' in nodes_to_call:
         spinner.message = "Searching for flights"
         logger.info("Step 5a: Processing with flights_node")
         state = await flights_node(state)
+        
+        # Stop spinner during user interaction
+        spinner.stop()
+        
+        # Interactive flight selection
+        logger.info("Step 5b: Interactive flight selection")
+        try:
+            # Display flight options to user
+            flights = state.get("flights", [])
+            if flights:
+                # Display up to 5 flight options
+                await display_flight_options(flights, limit=5)
+                
+                # Get user selection
+                selection_idx = await get_user_flight_selection(flights, limit=5)
+                
+                # Add selected flight to state
+                selected_flight = flights[selection_idx]
+                state["selected_flights"] = [selected_flight]
+                
+                print(f"\n✅ You selected flight option {selection_idx + 1}.")
+            else:
+                logger.warning("No flights found for selection")
+        except Exception as e:
+            logger.error(f"Error during flight selection: {e}")
+        
+        # Restart spinner for next steps
+        spinner.start()
     
     if 'places' in nodes_to_call:
         spinner.message = "Finding interesting places to visit"
-        logger.info("Step 5b: Processing with places_node")
+        logger.info("Step 5c: Processing with places_node")
         state = await places_node(state)
     
     if 'restaurants' in nodes_to_call:
         spinner.message = "Discovering local restaurants"
-        logger.info("Step 5c: Processing with restaurants_node")
+        logger.info("Step 5d: Processing with restaurants_node")
         state = await restaurants_node(state)
     
     if 'hotel' in nodes_to_call:
         spinner.message = "Locating suitable accommodations"
-        logger.info("Step 5d: Processing with hotel_node")
+        logger.info("Step 5e: Processing with hotel_node")
         state = await hotel_node(state)
     
     if 'budget' in nodes_to_call:
         spinner.message = "Calculating trip budget"
-        logger.info("Step 5e: Processing with budget_node")
+        logger.info("Step 5f: Processing with budget_node")
         state = await budget_node(state)
     
     # Step 6: Reviews Node
