@@ -5,6 +5,7 @@ import asyncio
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from app.schemas.trip_schema import TripMetadata
+from app.nodes.location_coordinates import LocationCoordinates
 
 # Define GraphState for type hints
 class GraphState(TypedDict, total=False):
@@ -348,6 +349,30 @@ async def summary_node(state: GraphState) -> GraphState:
                     json_str = json_str[:last_brace + 1]
                     itinerary = json.loads(json_str)
             
+            # Get all places from the itinerary and their activities
+            places_to_process = []
+            if "daily_itinerary" in itinerary:
+                for day_data in itinerary["daily_itinerary"].values():
+                    if "activities" in day_data:
+                        for activity in day_data["activities"]:
+                            # Get coordinates for all types of activities that have a location
+                            if "details" in activity:
+                                # Try to get the place name from either 'name' or 'location'
+                                place_name = activity["details"].get("name") or activity["details"].get("location")
+                                if place_name:  # Only add if name exists
+                                    places_to_process.append((activity, place_name))
+            
+            # Get coordinates for places in the itinerary
+            if places_to_process:
+                location_coords = LocationCoordinates()
+                for activity, place_name in places_to_process:
+                    try:
+                        coords = await location_coords.get_coordinates(place_name)
+                        if coords:
+                            activity["details"]["coordinates"] = coords
+                    except Exception as e:
+                        print(f"Error getting coordinates for {place_name}: {str(e)}")
+            
             # Merge review insights with the itinerary
             itinerary = merge_review_insights(itinerary, state)
             
@@ -379,9 +404,10 @@ async def summary_node(state: GraphState) -> GraphState:
             
     except Exception as e:
         # Handle any errors that occur during Claude API call
+        print(f"Error in Claude API call: {str(e)}")
+        print(f"Error type: {type(e)}")
         state["itinerary"] = {
             "error": f"Error generating itinerary: {str(e)}"
         }
-        print(f"Error in Claude API call: {e}")
     
     return state 
