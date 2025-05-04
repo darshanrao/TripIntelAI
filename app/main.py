@@ -59,254 +59,252 @@ AUDIO_DIR.mkdir(exist_ok=True)
 app.include_router(flight_booking_router)
 
 class ChatRequest(BaseModel):
-    """Request model for chat-based interactions."""
-    query: Optional[str] = None
+    """Request model for all chat-based interactions."""
+    message: Optional[str] = None  # Text input from user
     conversation_id: Optional[str] = None
     user_id: Optional[str] = None
-    selection_type: Optional[str] = None
-    selection_index: Optional[int] = None
-    step_by_step: Optional[bool] = None
+    interaction_type: Optional[str] = None  # 'chat', 'flight_selection', 'feedback', etc.
+    selection_data: Optional[Dict[str, Any]] = None  # For selections like flight choice
+    metadata: Optional[Dict[str, Any]] = None  # Additional context/data
 
-class ChatResponse(BaseModel):
-    """Response model for chat-based interactions."""
-    itinerary: Optional[str] = None
+class InteractionResponse(BaseModel):
+    """Unified response model for all interactions."""
+    conversation_id: str
+    success: bool
+    message: str  # Human readable response
+    data: Optional[Dict[str, Any]] = None  # Structured data (itinerary, flights, etc)
+    interaction_type: Optional[str] = None  # Type of interaction expected next
+    available_actions: Optional[List[Dict[str, Any]]] = None  # Possible next actions
     error: Optional[str] = None
-    is_valid: Optional[bool] = None
-    validation_errors: Optional[list] = None
-    conversation_id: Optional[str] = None
-    suggestions: Optional[List[str]] = None
-    next_question: Optional[str] = None
-    interactive_mode: Optional[bool] = None
-    selection_type: Optional[str] = None
-    flight_options: Optional[List[dict]] = None
-    selected_flight: Optional[dict] = None
-    message: Optional[str] = None
-    in_progress: Optional[bool] = None
-    step_by_step: Optional[bool] = None
 
-class ChatMessageHistory(BaseModel):
-    """Model for chat message history."""
-    role: str  # "user" or "assistant"
-    content: str
-    timestamp: str
-
-class SavedTrip(BaseModel):
-    """Model for saved trips."""
-    trip_id: str
-    user_id: Optional[str] = None
-    trip_data: TripData
-    created_at: str
-    updated_at: Optional[str] = None
-    name: Optional[str] = None
-
-class AnalyzeInputRequest(BaseModel):
-    input: str
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat_query(request: ChatRequest):
+@app.post("/interact", response_model=InteractionResponse)
+async def handle_interaction(request: ChatRequest):
     """
-    Process a natural language query through the travel planning pipeline.
-    Provides an interactive experience by asking follow-up questions if needed,
-    and supporting a step-by-step workflow.
-    
-    Example:
-    ```
-    {"query": "I want to plan a trip from Boston to NYC from May 15 to May 18, 2025 for 2 people."}
-    ```
+    Unified endpoint for all types of interactions.
+    Handles: chat messages, flight selection, feedback, and other interactions.
     """
     try:
-        print(f"[DEBUG] Received chat request: {request.dict()}")
+        print(f"[DEBUG] Received interaction: {request.dict()}")
+        
+        # Initialize or get conversation state
+        state = conversation_states.get(request.conversation_id, {})
+        if not request.conversation_id:
+            request.conversation_id = str(uuid.uuid4())
+            
+        # Handle different types of interactions
+        if request.interaction_type == "flight_selection":
+            return await handle_flight_interaction(request, state)
+        elif request.interaction_type == "feedback":
+            return await handle_feedback_interaction(request, state)
+        else:  # Default to chat interaction
+            return await handle_chat_interaction(request, state)
+            
+    except Exception as e:
+        print(f"[ERROR] Error in handle_interaction: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return InteractionResponse(
+            conversation_id=request.conversation_id,
+            success=False,
+            message=f"An error occurred: {str(e)}",
+            error=str(e)
+        )
 
-        # Check if we're handling a flight selection
-        if request.conversation_id and "selection_type" in request.__dict__ and request.__dict__["selection_type"] == "flight":
-            return await handle_flight_selection(request)
-            
-        # Check if conversation exists
-        if request.conversation_id and request.conversation_id in conversation_states:
-            # Get existing state
-            state = conversation_states[request.conversation_id]
-            
-            # Check if we're in interactive mode for missing field validation
-            if state.get("interactive_mode") and state.get("missing_fields"):
-                # Process the user response to a previous question
-                state = await process_user_response(state, request.query)
-                
-                # Save the updated state
-                conversation_states[request.conversation_id] = state
-                
-                # If we're still in interactive mode, return the next question
-                if state.get("interactive_mode") and state.get("next_question"):
-                    return ChatResponse(
-                        conversation_id=request.conversation_id,
-                        interactive_mode=True,
-                        next_question=state["next_question"]
-                    )
-                
-                # If validation is now complete, continue with the planning process
-                if state.get("is_valid"):
-                    state = await process_travel_query(state["query"], interactive=True)
-                    return ChatResponse(
-                        itinerary=state.get("itinerary"),
-                        is_valid=state.get("is_valid", False),
-                        conversation_id=request.conversation_id,
-                        error=state.get("error"),
-                        validation_errors=state.get("validation_errors")
-                    )
-            
-            # Not in interactive mode but has a valid conversation - handle as a new query
-            # Reset the state for a new query in the same conversation
-            state = {"query": request.query}
-        else:
-            # New conversation
-            conversation_id = request.conversation_id or str(uuid.uuid4())
-            state = {"query": request.query}
-            request.conversation_id = conversation_id
-        
-        # Process the query using our pipeline
-        state = await process_travel_query(request.query, interactive=True)
-        
-        # Save the state
+async def handle_chat_interaction(request: ChatRequest, state: Dict[str, Any]) -> InteractionResponse:
+    """Handle general chat interactions."""
+    try:
+        # Process the chat message
+        state["query"] = request.message
+        state = await process_travel_query(request.message, interactive=True)
         conversation_states[request.conversation_id] = state
         
-        # If we need more information, enter interactive mode
-        if not state.get("is_valid", False) and state.get("interactive_mode") and state.get("next_question"):
-            return ChatResponse(
+        # If validation failed
+        if not state.get("is_valid", False):
+            return InteractionResponse(
                 conversation_id=request.conversation_id,
-                interactive_mode=True,
-                next_question=state["next_question"],
-                is_valid=False
+                success=True,
+                message=state.get("error", "Please provide more details."),
+                interaction_type="validation",
+                available_actions=[{
+                    "type": "suggestion",
+                    "items": state.get("suggestions", [
+                        "Try specifying dates in MM/DD/YYYY format",
+                        "Make sure to include your destination",
+                        "Specify the number of travelers"
+                    ])
+                }]
             )
-        
-        # Return the response
-        return ChatResponse(
-            itinerary=state.get("itinerary"),
-            is_valid=state.get("is_valid", False),
+            
+        # If we need flight selection
+        if state.get("flights") and not state.get("selected_flights"):
+            return InteractionResponse(
+                conversation_id=request.conversation_id,
+                success=True,
+                message="Please select your preferred flight:",
+                interaction_type="flight_selection",
+                data={"flights": state.get("flights", [])},
+                available_actions=[{
+                    "type": "selection",
+                    "items": [{"id": idx, "data": flight} for idx, flight in enumerate(state.get("flights", []))]
+                }]
+            )
+            
+        # If we have a complete itinerary
+        if state.get("itinerary"):
+            return InteractionResponse(
+                conversation_id=request.conversation_id,
+                success=True,
+                message="Here's your travel itinerary. Would you like to modify anything?",
+                data={
+                    "itinerary": state.get("itinerary"),
+                    "trip_summary": state.get("trip_summary", {}),
+                    "daily_itinerary": state.get("daily_itinerary", {})
+                },
+                interaction_type="feedback",
+                available_actions=[{
+                    "type": "modification",
+                    "items": [
+                        {"id": "1", "category": "Transportation", "description": "Modify flights/routes"},
+                        {"id": "2", "category": "Accommodations", "description": "Change hotel selection"},
+                        {"id": "3", "category": "Activities", "description": "Modify places to visit"},
+                        {"id": "4", "category": "Dining", "description": "Change restaurant options"},
+                        {"id": "5", "category": "Schedule", "description": "Adjust timing of activities"},
+                        {"id": "6", "category": "Budget", "description": "Modify costs/budget"}
+                    ]
+                }]
+            )
+            
+        # Default response for other cases
+        return InteractionResponse(
             conversation_id=request.conversation_id,
-            error=state.get("error"),
-            validation_errors=state.get("validation_errors"),
-            suggestions=state.get("suggestions", [
-                "Try specifying dates in MM/DD/YYYY format", 
-                "Make sure to include your destination",
-                "Specify the number of travelers"
-            ]) if not state.get("is_valid", False) else None
+            success=True,
+            message="I'm processing your request. Please provide more details if needed.",
+            interaction_type="chat"
         )
         
     except Exception as e:
-        print(f"[ERROR] Error in chat_query: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] Error in handle_chat_interaction: {str(e)}")
+        raise
 
-async def handle_flight_selection(request):
-    """
-    Handle the flight selection from the user, similar to CLI's flight selection.
-    This mimics the CLI's get_user_flight_selection logic.
-    """
+async def handle_flight_interaction(request: ChatRequest, state: Dict[str, Any]) -> InteractionResponse:
+    """Handle flight selection interactions."""
     try:
-        print(f"[DEBUG] Handling flight selection: {request.__dict__}")
-        
-        # Extract request data
-        conversation_id = request.conversation_id
-        
-        # Check if selection_index is present and valid
-        if "selection_index" not in request.__dict__ or request.__dict__["selection_index"] is None:
-            print("[ERROR] Missing selection_index in flight selection request")
-            return ChatResponse(
-                error="Missing flight selection index",
-                is_valid=False,
-                conversation_id=conversation_id
+        if not state.get("flights"):
+            return InteractionResponse(
+                conversation_id=request.conversation_id,
+                success=False,
+                message="No flights available for selection.",
+                error="No flights in current state"
             )
-        
-        selection_index = request.__dict__["selection_index"]
-        print(f"[DEBUG] Flight selection index: {selection_index}")
-        
-        # Ensure we have a valid conversation state
-        if not conversation_id or conversation_id not in conversation_states:
-            print(f"[ERROR] Invalid conversation ID: {conversation_id}")
-            return ChatResponse(
-                error="Invalid conversation ID",
-                is_valid=False,
-                conversation_id=conversation_id
+            
+        selection_data = request.selection_data
+        if not selection_data or "flight_index" not in selection_data:
+            return InteractionResponse(
+                conversation_id=request.conversation_id,
+                success=False,
+                message="Please provide a flight selection.",
+                error="Missing flight selection"
             )
+            
+        flight_index = selection_data["flight_index"]
+        selected_flight = state["flights"][flight_index]
         
-        # Get the conversation state
-        state = conversation_states[conversation_id]
-        print(f"[DEBUG] Conversation state keys: {state.keys()}")
-        
-        # Ensure we have flights and are awaiting selection
-        if not state.get("awaiting_flight_selection"):
-            print("[ERROR] Not awaiting flight selection")
-            return ChatResponse(
-                error="No flight selection was requested",
-                is_valid=False,
-                conversation_id=conversation_id
-            )
-        
-        # Make sure we have flight options
-        if not state.get("flights") or len(state.get("flights", [])) == 0:
-            print("[ERROR] No flight options available in state")
-            return ChatResponse(
-                error="No flight options available",
-                is_valid=False,
-                conversation_id=conversation_id
-            )
-        
-        print(f"[DEBUG] Available flights: {len(state['flights'])}")
-        
-        # Validate selection index
-        if selection_index < 0 or selection_index >= len(state["flights"]):
-            print(f"[ERROR] Invalid flight selection index: {selection_index}, max: {len(state['flights'])-1}")
-            return ChatResponse(
-                error=f"Invalid flight selection index: {selection_index}",
-                is_valid=False,
-                conversation_id=conversation_id
-            )
-        
-        # Get the selected flight
-        selected_flight = state["flights"][selection_index]
-        print(f"[DEBUG] Selected flight: {selected_flight}")
-        
-        # Update state with selected flight (matching CLI behavior)
+        # Update state with selection
         state["selected_flights"] = [selected_flight]
         state["awaiting_flight_selection"] = False
+        conversation_states[request.conversation_id] = state
         
-        # Log the selection like the CLI does
-        print(f"\n✅ Flight option {selection_index + 1} selected.")
-        
-        # Save the updated state
-        conversation_states[conversation_id] = state
-        
-        # Get the nodes that need processing
+        # Process remaining nodes
         nodes_to_call = state.get('nodes_to_call', [])
+        state = await process_remaining_nodes(state, nodes_to_call, request.conversation_id)
         
-        # Check for step-by-step mode
-        if request.__dict__.get("step_by_step"):
-            # In step-by-step mode, just confirm the selection and let the client make another request
-            # to continue processing. This matches the frontend behavior.
-            print("[DEBUG] Step-by-step mode: Confirming selection only")
-            return ChatResponse(
-                selected_flight=selected_flight,
-                message="Flight selected. Continuing with your trip planning...",
-                conversation_id=conversation_id,
-                is_valid=True,
-                step_by_step=True,
-                in_progress=True
-            )
-        else:
-            # In non-step-by-step mode, continue with processing
-            print("[DEBUG] Continuing with remaining nodes after flight selection")
-            # Process the remaining nodes
-            return await process_remaining_nodes(state, nodes_to_call, conversation_id)
+        # Return response with updated itinerary
+        return InteractionResponse(
+            conversation_id=request.conversation_id,
+            success=True,
+            message="Flight selected! Here's your updated itinerary:",
+            data={
+                "selected_flight": selected_flight,
+                "itinerary": state.get("itinerary"),
+                "trip_summary": state.get("trip_summary", {}),
+                "daily_itinerary": state.get("daily_itinerary", {})
+            },
+            interaction_type="feedback",
+            available_actions=[{
+                "type": "modification",
+                "items": [
+                    {"id": "1", "category": "Transportation", "description": "Modify flights/routes"},
+                    {"id": "2", "category": "Accommodations", "description": "Change hotel selection"},
+                    {"id": "3", "category": "Activities", "description": "Modify places to visit"},
+                    {"id": "4", "category": "Dining", "description": "Change restaurant options"},
+                    {"id": "5", "category": "Schedule", "description": "Adjust timing of activities"},
+                    {"id": "6", "category": "Budget", "description": "Modify costs/budget"}
+                ]
+            }]
+        )
         
     except Exception as e:
-        print(f"[ERROR] Error in handle_flight_selection: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return ChatResponse(
-            error=f"An error occurred while processing your flight selection: {str(e)}",
-            is_valid=False,
-            conversation_id=request.conversation_id
+        print(f"[ERROR] Error in handle_flight_interaction: {str(e)}")
+        raise
+
+async def handle_feedback_interaction(request: ChatRequest, state: Dict[str, Any]) -> InteractionResponse:
+    """Handle feedback and modification requests."""
+    try:
+        if not request.selection_data or "category_id" not in request.selection_data:
+            return InteractionResponse(
+                conversation_id=request.conversation_id,
+                success=False,
+                message="Please specify what you'd like to modify.",
+                error="Missing feedback category"
+            )
+            
+        # Process the feedback
+        feedback = {
+            "category": int(request.selection_data["category_id"]),
+            "feedback": request.selection_data.get("specific_feedback", "")
+        }
+        
+        state = await process_feedback(state, feedback)
+        conversation_states[request.conversation_id] = state
+        
+        return InteractionResponse(
+            conversation_id=request.conversation_id,
+            success=True,
+            message="I've updated your itinerary based on your feedback. Would you like to make any other changes?",
+            data={
+                "itinerary": state.get("itinerary"),
+                "trip_summary": state.get("trip_summary", {}),
+                "daily_itinerary": state.get("daily_itinerary", {})
+            },
+            interaction_type="feedback",
+            available_actions=[{
+                "type": "modification",
+                "items": [
+                    {"id": "1", "category": "Transportation", "description": "Modify flights/routes"},
+                    {"id": "2", "category": "Accommodations", "description": "Change hotel selection"},
+                    {"id": "3", "category": "Activities", "description": "Modify places to visit"},
+                    {"id": "4", "category": "Dining", "description": "Change restaurant options"},
+                    {"id": "5", "category": "Schedule", "description": "Adjust timing of activities"},
+                    {"id": "6", "category": "Budget", "description": "Modify costs/budget"}
+                ]
+            }]
         )
+        
+    except Exception as e:
+        print(f"[ERROR] Error in handle_feedback_interaction: {str(e)}")
+        raise
+
+# Remove or deprecate old endpoints
+@app.post("/chat", response_model=InteractionResponse)
+async def chat_query(request: ChatRequest):
+    """Deprecated: Use /interact endpoint instead."""
+    return await handle_interaction(request)
+
+@app.post("/feedback", response_model=InteractionResponse)
+async def process_feedback_deprecated(request: ChatRequest):
+    """Deprecated: Use /interact endpoint instead."""
+    request.interaction_type = "feedback"
+    return await handle_interaction(request)
 
 @app.get("/conversations")
 async def list_conversations():
@@ -338,7 +336,7 @@ async def root():
     return {
         "message": "Welcome to AI Travel Planner API",
         "endpoints": {
-            "/chat": "For natural language queries with interactive follow-up",
+            "/interact": "For all types of interactions",
             "/generate-itinerary": "For structured trip data",
             "/conversations": "List all active conversations",
             "/conversations/{conversation_id}": "Get or delete a conversation",
@@ -1096,12 +1094,12 @@ async def process_valid_state(state, conversation_id):
                 print(f"[DEBUG] Got {len(state['flights'])} flight options, returning for selection")
                 
                 # Return response asking for flight selection
-                return ChatResponse(
+                return InteractionResponse(
                     conversation_id=conversation_id,
-                    is_valid=True,
-                    selection_type="flight",
-                    flight_options=state["flights"],
-                    next_question="Please select a flight that best suits your needs:"
+                    success=True,
+                    message="Please select a flight that best suits your needs:",
+                    data={"flights": state["flights"]},
+                    interaction_type="flight_selection"
                 )
             else:
                 print("[ERROR] Still no flights available after fallback")
@@ -1158,10 +1156,16 @@ async def process_remaining_nodes(state, nodes_to_call, conversation_id):
         conversation_states[conversation_id] = state
         
         # Return the completed itinerary
-        return ChatResponse(
-            itinerary=state.get("itinerary", "No itinerary could be generated."),
-            is_valid=True,
-            conversation_id=conversation_id
+        return InteractionResponse(
+            conversation_id=conversation_id,
+            success=True,
+            message="Here's your travel itinerary. Would you like to modify anything?",
+            data={
+                "itinerary": state.get("itinerary", "No itinerary could be generated."),
+                "trip_summary": state.get("trip_summary", {}),
+                "daily_itinerary": state.get("daily_itinerary", {})
+            },
+            interaction_type="feedback"
         )
         
     except Exception as e:
@@ -1170,13 +1174,14 @@ async def process_remaining_nodes(state, nodes_to_call, conversation_id):
         traceback.print_exc()
         
         # Return error response
-        return ChatResponse(
-            error=f"An error occurred while processing your request: {str(e)}",
-            is_valid=False,
-            conversation_id=conversation_id
+        return InteractionResponse(
+            conversation_id=conversation_id,
+            success=False,
+            message=f"An error occurred while processing your request: {str(e)}",
+            error=str(e)
         )
 
-@app.post("/continue-processing", response_model=ChatResponse)
+@app.post("/continue-processing", response_model=InteractionResponse)
 async def continue_processing(request: ChatRequest):
     """
     Continue processing a conversation after a flight has been selected.
@@ -1188,18 +1193,20 @@ async def continue_processing(request: ChatRequest):
         # Ensure we have a valid conversation ID
         if not request.conversation_id:
             print("[ERROR] Missing conversation_id in continue-processing request")
-            return ChatResponse(
-                error="Missing conversation ID",
-                is_valid=False,
-                conversation_id=None
+            return InteractionResponse(
+                conversation_id=None,
+                success=False,
+                message="Missing conversation ID",
+                error="Missing conversation ID"
             )
             
         if request.conversation_id not in conversation_states:
             print(f"[ERROR] Invalid conversation ID: {request.conversation_id}")
-            return ChatResponse(
-                error="Invalid conversation ID",
-                is_valid=False,
-                conversation_id=request.conversation_id
+            return InteractionResponse(
+                conversation_id=request.conversation_id,
+                success=False,
+                message="Invalid conversation ID",
+                error="Invalid conversation ID"
             )
         
         # Get the conversation state
@@ -1217,29 +1224,27 @@ async def continue_processing(request: ChatRequest):
         elif state.get("planning_complete"):
             # If planning is already complete, just return the itinerary
             print("[DEBUG] Planning is already complete, returning itinerary")
-            return ChatResponse(
-                itinerary=state.get("itinerary", "No itinerary could be generated."),
-                is_valid=True,
-                conversation_id=request.conversation_id
-            )
+            return await process_valid_state(state, request.conversation_id)
         else:
             # No flight selection was done, or we're in an unexpected state
             print(f"[ERROR] Unexpected state in continue-processing. selected_flights: {state.get('selected_flights')}, planning_complete: {state.get('planning_complete')}")
             print(f"[DEBUG] State contains keys: {state.keys()}")
-            return ChatResponse(
-                error="No pending operations to continue",
-                is_valid=False,
-                conversation_id=request.conversation_id
+            return InteractionResponse(
+                conversation_id=request.conversation_id,
+                success=False,
+                message="No pending operations to continue",
+                error="No pending operations to continue"
             )
         
     except Exception as e:
         print(f"[ERROR] Error in continue_processing: {str(e)}")
         import traceback
         traceback.print_exc()
-        return ChatResponse(
-            error=f"An error occurred while continuing processing: {str(e)}",
-            is_valid=False,
-            conversation_id=request.conversation_id
+        return InteractionResponse(
+            conversation_id=request.conversation_id,
+            success=False,
+            message=f"An error occurred while continuing processing: {str(e)}",
+            error=str(e)
         )
 
 if __name__ == "__main__":
