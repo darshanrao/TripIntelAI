@@ -1,22 +1,18 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 /**
- * Send a chat message to the backend
+ * Send a chat message to the backend (now uses /analyze-input)
  * @param {string} message - User's chat message
- * @param {string} conversationId - Optional conversation ID for context
  * @returns {Promise} - Promise with the response
  */
-export const sendChatMessage = async (message, conversationId = null) => {
+export const sendChatMessage = async (message) => {
   try {
-    const response = await fetch(`${API_URL}/chat`, {
+    const response = await fetch(`${API_URL}/analyze-input`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        query: message,
-        conversation_id: conversationId,
-      }),
+      body: JSON.stringify({ input: message }),
     });
 
     if (!response.ok) {

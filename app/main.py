@@ -8,8 +8,17 @@ import os
 import shutil
 from endpoints.services.llm_service import parse_user_input
 from endpoints.services.speech_to_text import transcribe_audio
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="AI Travel Planner")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development; restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialize the graph
 trip_planner = TripPlannerGraph()
