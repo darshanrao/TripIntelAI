@@ -7,9 +7,17 @@ const ItineraryView = ({ days, selectedDay, onSelectDay }) => {
 
   // Set activities whenever selectedDay changes
   useEffect(() => {
+    // Handle case where days might be empty or undefined
+    if (!days || days.length === 0) {
+      setActivities([]);
+      return;
+    }
+
     const currentDayData = days.find(day => day.day === selectedDay);
     if (currentDayData) {
-      setActivities(currentDayData.activities);
+      setActivities(currentDayData.activities || []);
+    } else {
+      setActivities([]);
     }
   }, [days, selectedDay]);
 

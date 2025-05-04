@@ -142,41 +142,96 @@ export default function Home() {
   const handleChatMessage = async (message) => {
     console.log('Message from chat:', message);
     
-    // If there's already an itinerary, process messages directly
-    if (itineraryData && itineraryData.days && itineraryData.days.length > 0) {
-      // In a real app, we would use this to refine/modify the existing itinerary
-      return;
-    }
-    
     setIsLoading(true);
     
     try {
-      // In a real implementation, this would be integrated with your backend
-      // This is just simulating API behavior for demonstration
+      // Call the actual API
+      const response = await sendChatMessage(message);
+      console.log('API response:', response);
       
-      // Detect if message looks like a trip request
-      const isTripRequest = /(?:plan|create|make|generate)\s+(?:a|an)?\s*(?:trip|itinerary|vacation|holiday|journey)/i.test(message) ||
-                           /(?:going|travel|visit|traveling)\s+to/i.test(message);
+      // Parse the itinerary from API response
+      let responseText = '';
+      let parsedItinerary = null;
       
-      if (isTripRequest) {
-        // Set a timeout to simulate API processing
-        setTimeout(() => {
-          // Parse the itinerary from API response
-          const parsedItinerary = parseItineraryFromText(sampleItinerary);
-          if (parsedItinerary) {
-            setItineraryData(parsedItinerary);
-            
-            // If on mobile, switch to itinerary view
-            if (isMobile) {
-              setActiveTab('itinerary');
+      if (response.response) {
+        if (typeof response.response === 'string') {
+          responseText = response.response;
+          parsedItinerary = parseItineraryFromText(responseText);
+        } else {
+          // Handle complex object response
+          try {
+            if (response.response.daily_itinerary) {
+              // Convert the complex itinerary format to our app's format
+              const days = [];
+              const dailyItinerary = response.response.daily_itinerary;
+              
+              Object.keys(dailyItinerary).forEach((dayNum, dayIndex) => {
+                const dayActivities = dailyItinerary[dayNum];
+                const activities = dayActivities.map((activity, actIndex) => {
+                  // Determine icon based on activity text
+                  let icon = '📍';
+                  const activityText = activity.activity.toLowerCase();
+                  if (/breakfast|lunch|dinner|cafe|restaurant|food|eat/i.test(activityText)) {
+                    icon = '🍽️';
+                  } else if (/museum|gallery|art|exhibit/i.test(activityText)) {
+                    icon = '🏛️';
+                  } else if (/park|garden|nature|walk|hike/i.test(activityText)) {
+                    icon = '🌳';
+                  } else if (/hotel|accommodation|stay|check|inn/i.test(activityText)) {
+                    icon = '🏨';
+                  } else if (/tour|visit|explore/i.test(activityText)) {
+                    icon = '🔍';
+                  } else if (/show|theater|concert|music|performance/i.test(activityText)) {
+                    icon = '🎭';
+                  } else if (/beach|ocean|sea|swim/i.test(activityText)) {
+                    icon = '🏖️';
+                  }
+                  
+                  // Create a location with slight random variation from NYC center
+                  const location = {
+                    lat: 40.7580 + (Math.random() * 0.1 - 0.05),
+                    lng: -73.9855 + (Math.random() * 0.1 - 0.05)
+                  };
+                  
+                  return {
+                    time: activity.time || `${9 + actIndex}:00 AM`,
+                    title: activity.activity,
+                    description: activity.description || '',
+                    icon,
+                    location
+                  };
+                });
+                
+                days.push({
+                  day: parseInt(dayNum) || dayIndex + 1,
+                  activities
+                });
+              });
+              
+              parsedItinerary = { days };
+            } else {
+              // Fall back to text parsing if the structure isn't as expected
+              responseText = JSON.stringify(response.response, null, 2);
+              parsedItinerary = parseItineraryFromText(responseText);
             }
+          } catch (error) {
+            console.error('Error processing complex itinerary:', error);
+            responseText = JSON.stringify(response.response);
+            parsedItinerary = parseItineraryFromText(responseText);
           }
-          
-          setIsLoading(false);
-        }, 2000);
-      } else {
-        setIsLoading(false);
+        }
       }
+      
+      if (parsedItinerary && parsedItinerary.days && parsedItinerary.days.length > 0) {
+        setItineraryData(parsedItinerary);
+        
+        // If on mobile, switch to itinerary view
+        if (isMobile) {
+          setActiveTab('itinerary');
+        }
+      }
+      
+      setIsLoading(false);
     } catch (error) {
       console.error('Error processing message:', error);
       setIsLoading(false);

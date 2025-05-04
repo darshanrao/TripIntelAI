@@ -114,10 +114,48 @@ const ChatInterface = ({ onSendMessage }) => {
       // Hide typing indicator
       setIsTyping(false);
       
+      // Prepare response text - handle complex objects
+      let responseText = "";
+      if (response.response) {
+        if (typeof response.response === 'string') {
+          responseText = response.response;
+        } else {
+          // It's an object, convert to readable text
+          try {
+            if (response.response.daily_itinerary) {
+              const dailyItinerary = response.response.daily_itinerary;
+              // Format itinerary days
+              responseText = Object.keys(dailyItinerary).map(day => {
+                const activities = dailyItinerary[day];
+                return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity}`).join('\n')}`;
+              }).join('\n\n');
+            } else if (response.response.trip_summary) {
+              // Format trip summary
+              const summary = response.response.trip_summary;
+              responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
+            } else {
+              // Fall back to JSON.stringify with formatting
+              responseText = JSON.stringify(response.response, null, 2);
+            }
+          } catch (error) {
+            // If we can't process it nicely, fall back to simple stringify
+            responseText = JSON.stringify(response.response);
+          }
+        }
+      } else if (response.itinerary) {
+        responseText = typeof response.itinerary === 'string' 
+          ? response.itinerary 
+          : JSON.stringify(response.itinerary);
+      } else if (response.error) {
+        responseText = response.error;
+      } else {
+        responseText = "I couldn't process that request. Can you try again?";
+      }
+      
       // Add AI response to chat
       const aiResponse = {
         id: Date.now() + 1,
-        text: response.itinerary || response.error || "I couldn't process that request. Can you try again?",
+        text: responseText,
         sender: 'ai',
         timestamp: new Date()
       };

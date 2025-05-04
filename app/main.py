@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from pydantic import BaseModel
-from app.graph.trip_planner_graph import TripPlannerGraph
+from app.graph.trip_planner_graph_mock import TripPlannerGraphMock
 from app.schemas.trip_schema import TripData
 from typing import Optional, List, Dict, Any
 import tempfile
@@ -21,7 +21,7 @@ app.add_middleware(
 )
 
 # Initialize the graph
-trip_planner = TripPlannerGraph()
+trip_planner = TripPlannerGraphMock()
 
 class ChatRequest(BaseModel):
     """Request model for chat-based interactions."""
@@ -211,8 +211,33 @@ async def search_travel_options(
 @app.post("/analyze-input")
 async def analyze_input(request: AnalyzeInputRequest):
     try:
-        llm_response = parse_user_input(request.input)
-        return {"response": llm_response}
+        result = await trip_planner.process(request.input)
+        
+        # Extract a simple text response from the complex result
+        if isinstance(result, dict):
+            if "itinerary" in result and result["itinerary"]:
+                # Check if itinerary is a string or an object
+                if isinstance(result["itinerary"], str):
+                    return {"response": result["itinerary"]}
+                else:
+                    # Just pass through the complex object - frontend will handle it
+                    return {"response": result["itinerary"]}
+            elif "trip_summary" in result:
+                # Return the structured data for the frontend to handle
+                if "daily_itinerary" in result:
+                    return {"response": {
+                        "trip_summary": result["trip_summary"],
+                        "daily_itinerary": result.get("daily_itinerary", {}),
+                        "review_highlights": result.get("review_highlights", {})
+                    }}
+                else:
+                    # Fallback to string summary
+                    summary = result["trip_summary"]
+                    return {"response": f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}. Duration: {summary.get('duration_days', 'several')} days."}
+            else:
+                return {"response": "Your trip has been planned successfully."}
+        else:
+            return {"response": "Thank you for your query. Your trip is being processed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -224,8 +249,35 @@ async def voice_input(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, temp)
             temp_path = temp.name
         transcript = transcribe_audio(temp_path)
-        llm_response = parse_user_input(transcript)
-        return {"response": llm_response}
+        
+        # Process the transcript with the trip planner
+        result = await trip_planner.process(transcript)
+        
+        # Extract a simple text response from the complex result
+        if isinstance(result, dict):
+            if "itinerary" in result and result["itinerary"]:
+                # Check if itinerary is a string or an object
+                if isinstance(result["itinerary"], str):
+                    return {"response": result["itinerary"]}
+                else:
+                    # Just pass through the complex object - frontend will handle it
+                    return {"response": result["itinerary"]}
+            elif "trip_summary" in result:
+                # Return the structured data for the frontend to handle
+                if "daily_itinerary" in result:
+                    return {"response": {
+                        "trip_summary": result["trip_summary"],
+                        "daily_itinerary": result.get("daily_itinerary", {}),
+                        "review_highlights": result.get("review_highlights", {})
+                    }}
+                else:
+                    # Fallback to string summary
+                    summary = result["trip_summary"]
+                    return {"response": f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}. Duration: {summary.get('duration_days', 'several')} days."}
+            else:
+                return {"response": "Your trip has been planned successfully."}
+        else:
+            return {"response": "Thank you for your query. Your trip is being processed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
