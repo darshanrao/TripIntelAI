@@ -22,11 +22,26 @@ const MapView = ({ activities, day }) => {
   const directionsRendererRef = useRef(null);
 
   // Load the Google Maps API
-  const { isLoaded, loadError } = useJsApiLoader({
+  const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE';
+
+  const loaderOptions = {
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE', // Replace with your API key
-    libraries: ['places', 'directions']
-  });
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: ['places']  // ✅ remove 'directions'
+  };
+  
+  const { isLoaded, loadError } = useJsApiLoader(loaderOptions);
+
+  // Add debugging logs
+  useEffect(() => {
+    console.log('MapView Debug:', {
+      isLoaded,
+      loadError,
+      activities,
+      apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+      mapCenter
+    });
+  }, [isLoaded, loadError, activities, mapCenter]);
 
   // Set up map markers from activities
   useEffect(() => {
