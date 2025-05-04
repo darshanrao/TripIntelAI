@@ -6,7 +6,7 @@ from app.nodes.chat_input_node import chat_input_node
 from mock_intent_parser import mock_intent_parser  # Use mock parser instead
 from app.nodes.trip_validator_node import trip_validator_node
 from app.nodes.planner_node import planner_node
-from app.nodes.agent_nodes_1 import flights_node, places_node, restaurants_node, hotel_node, budget_node
+from app.nodes.agent_nodes import flights_node, places_node, restaurants_node, hotel_node, budget_node, reviews_node
 from app.nodes.summary_node import summary_node
 
 # Load environment variables
@@ -88,8 +88,40 @@ async def test_pipeline_step_by_step():
             state = await budget_node(state)
             print(f"Total budget: ${state.get('budget', {}).get('total', 0)}")
         
-        # Step 6: Summary Node
-        print("\n=== STEP 6: Summary Node ===")
+        print("\n=== STEP 6: Reviews Node ===")
+        state = await reviews_node(state)
+        
+        # After running the reviews node, print the results
+        print("\n=== Review Insights ===")
+        for place in state.get("places", []):
+            if "review_insights" in place:
+                print(f"\n{place['name']}:")
+                print(f"Total Available Reviews: {place['review_insights'].get('total_available_reviews', 0)}")
+                print(f"Analyzed Reviews: {place['review_insights'].get('analyzed_reviews', 0)}")
+                print(f"Average Rating: {place['review_insights'].get('average_rating', 0)}")
+                print(f"Review Distribution: {place['review_insights'].get('review_distribution', {})}")
+                print(f"Analysis: {place['review_insights'].get('analysis', '')}")
+
+        for restaurant in state.get("restaurants", []):
+            if "review_insights" in restaurant:
+                print(f"\n{restaurant['name']}:")
+                print(f"Total Available Reviews: {restaurant['review_insights'].get('total_available_reviews', 0)}")
+                print(f"Analyzed Reviews: {restaurant['review_insights'].get('analyzed_reviews', 0)}")
+                print(f"Average Rating: {restaurant['review_insights'].get('average_rating', 0)}")
+                print(f"Review Distribution: {restaurant['review_insights'].get('review_distribution', {})}")
+                print(f"Analysis: {restaurant['review_insights'].get('analysis', '')}")
+
+        hotel = state.get("hotel", {})
+        if "review_insights" in hotel:
+            print(f"\n{hotel['name']}:")
+            print(f"Total Available Reviews: {hotel['review_insights'].get('total_available_reviews', 0)}")
+            print(f"Analyzed Reviews: {hotel['review_insights'].get('analyzed_reviews', 0)}")
+            print(f"Average Rating: {hotel['review_insights'].get('average_rating', 0)}")
+            print(f"Review Distribution: {hotel['review_insights'].get('review_distribution', {})}")
+            print(f"Analysis: {hotel['review_insights'].get('analysis', '')}")
+        
+        # Step 7: Summary Node
+        print("\n=== STEP 7: Summary Node ===")
         state = await summary_node(state)
         print("\nGENERATED ITINERARY:")
         print("=" * 80)
