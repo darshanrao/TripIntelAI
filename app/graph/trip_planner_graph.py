@@ -7,7 +7,7 @@ from app.nodes.trip_validator_node import trip_validator_node
 from app.nodes.planner_node import planner_node
 from app.nodes.agent_nodes import (
     flights_node, route_node, places_node, restaurants_node, 
-    hotel_node, budget_node
+    hotel_node, budget_node, reviews_node
 )
 from app.nodes.summary_node import summary_node
 
@@ -72,6 +72,7 @@ class TripPlannerGraph:
         - TripValidatorNode
         - PlannerNode
         - Agent nodes (Flights, Route, Places, Restaurants, Hotel, Budget)
+        - ReviewsNode
         - SummaryNode
         """
         # Initialize the graph
@@ -90,6 +91,9 @@ class TripPlannerGraph:
         workflow.add_node("restaurants", restaurants_node)
         workflow.add_node("hotel", hotel_node)
         workflow.add_node("budget", budget_node)
+        
+        # Add reviews node
+        workflow.add_node("reviews", reviews_node)
         
         # Add summary node
         workflow.add_node("summary", summary_node)
@@ -121,12 +125,15 @@ class TripPlannerGraph:
                 lambda state, node=node_name: node if node in state.get("nodes_to_call", []) else None,
                 {
                     node_name: node_name,
-                    None: "summary"  # Skip to summary if node not needed
+                    None: "reviews"  # If node not needed, go to reviews
                 }
             )
             
-            # After each agent node, go to summary
-            workflow.add_edge(node_name, "summary")
+            # After each agent node, go to reviews
+            workflow.add_edge(node_name, "reviews")
+        
+        # After reviews, go to summary
+        workflow.add_edge("reviews", "summary")
         
         # Set the final state
         workflow.set_finish_point("summary")
@@ -176,6 +183,7 @@ class TripPlannerGraph:
         """
         graph = self.build()
         
+<<<<<<< Updated upstream
         # Initialize state with user query, ensuring no conflicting keys exist
         initial_state = {
             "query": query,
@@ -187,6 +195,10 @@ class TripPlannerGraph:
             "hotel": {},
             "budget": {}
         }
+=======
+        # Initialize state with both query and raw_query
+        initial_state = {"query": query, "raw_query": query}
+>>>>>>> Stashed changes
         
         try:
             # Run the graph
