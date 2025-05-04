@@ -3,7 +3,7 @@ import os
 import time
 import threading
 from dotenv import load_dotenv
-from app.graph.trip_planner_graph_mock import TripPlannerGraphMock
+from app.graph.trip_planner_graph import TripPlannerGraph
 
 # Load environment variables
 load_dotenv()
@@ -38,7 +38,7 @@ class Spinner:
 async def process_travel_query(query):
     """Process a travel query using the trip planner pipeline"""
     # Initialize the trip planner graph
-    trip_planner = TripPlannerGraphMock()
+    trip_planner = TripPlannerGraph()
     
     # Process the query
     result = await trip_planner.process(query)

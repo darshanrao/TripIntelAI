@@ -26,12 +26,12 @@ if missing_keys:
 
 if __name__ == "__main__":
     print("=" * 80)
-    print("Starting AI Travel Planner API (Interactive Version) on port 8002...")
-    print("This version uses an interactive trip validator that will ask follow-up questions")
+    print("Starting AI Travel Planner API on port 8002...")
+    print("This version uses an interactive validator that will ask follow-up questions")
     print("when trip information is incomplete.")
     print("-" * 80)
     print("API Documentation: http://localhost:8002/docs")
     print("=" * 80)
     
     # Run the API server
-    uvicorn.run("app.main_interactive:app", host="0.0.0.0", port=8002, reload=True) 
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8002, reload=True) 

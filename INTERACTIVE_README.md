@@ -1,6 +1,6 @@
-# TripIntelAI Interactive Trip Validator
+# TripIntelAI with Interactive Trip Validator
 
-This README explains how to use the interactive trip validator component we've added to TripIntelAI. This feature enhances the trip planning experience by engaging users in a conversational way when information is missing or incomplete.
+This README explains how to use the interactive trip validator component we've integrated into TripIntelAI. This feature enhances the trip planning experience by engaging users in a conversational way when information is missing or incomplete.
 
 ## Overview
 
@@ -14,13 +14,13 @@ The interactive trip validator:
 
 ## Files and Components
 
-Here's what we've created:
+Here's what we've integrated:
 
-- **app/nodes/interactive_trip_validator_node.py**: The core validator that checks for required fields and processes user responses
-- **app/nodes/trip_validator_integration.py**: Example of how to integrate the validator into a pipeline
-- **app/main_interactive.py**: A modified FastAPI server that uses interactive validation
-- **run_interactive.py**: Script to run the interactive API server
-- **test_interactive.py**: Command-line test tool for the interactive validator
+- **app/nodes/trip_validator_node.py**: The enhanced validator that supports both standard validation and interactive validation with conversational functionality
+- **app/nodes/enhanced_conversation_handler.py**: Handles the conversational aspects, generating natural questions
+- **app/nodes/enhanced_extractor.py**: Enhanced extractors for dates, locations, and numbers
+- **app/main.py**: FastAPI server that uses the interactive validation capabilities
+- **run_interactive.py**: Script to run the API server
 
 ## Required Fields
 
@@ -32,25 +32,15 @@ The validator checks for these required fields:
 - **end_date**: When the trip ends
 - **num_people**: How many people are traveling
 
-## Running the Interactive API Server
+## Running the API Server
 
-To start the interactive API server:
+To start the API server:
 
 ```bash
 python run_interactive.py
 ```
 
 This will start a FastAPI server on port 8002 that uses the interactive validator.
-
-## Testing the Interactive Validator
-
-To test the validator from the command line:
-
-```bash
-python test_interactive.py
-```
-
-This will start a simple chat interface where you can enter a query and the system will ask you for any missing information.
 
 ## Using the Interactive API
 

@@ -208,4 +208,21 @@ class TripPlannerGraph:
         # Process directly through the summary node
         result_state = await summary_node(initial_state)
         
-        return result_state 
+        return result_state
+
+    async def process_with_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process with an existing state through the graph and return the final result.
+        
+        Args:
+            state: Current state with validated metadata
+            
+        Returns:
+            Dict containing the generated itinerary and other results
+        """
+        graph = self.build()
+        
+        # Run the graph with the existing state
+        final_state = await graph.ainvoke(state)
+        
+        return final_state 

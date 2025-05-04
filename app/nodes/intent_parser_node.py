@@ -6,20 +6,36 @@ import json
 import re
 import os
 import asyncio
+import logging
 
-INTENT_PARSER_PROMPT = """You are a travel intent parser. Extract structured travel intent from the user's query.
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+INTENT_PARSER_PROMPT = """You are a travel intent parser. Extract structured travel intent from the user's query that may contain typos or natural language variations.
 
 User Query: {query}
 
 Extract the following information if present:
-- Source location (where the trip starts)
+- Source location (where the trip starts from)
 - Destination location (where the trip goes to)
 - Start date of the trip
 - End date of the trip
 - Number of people traveling
 - Preferences (e.g., budget, luxury, family-friendly, restaurants, museums, etc.)
 
-If any information is missing, make a reasonable guess or use None.
+When extracting locations:
+- Correct common typos (e.g., "bsoton" → "Boston", "NYC" → "New York City")
+- Default source to "Unknown" if not specified
+
+When extracting dates:
+- Recognize various formats (e.g., "May 18th", "05/18/2025", "next month")
+- Convert to YYYY-MM-DD format
+- Handle typos in month names (e.g., "mmay" → "May")
+- If only one date is mentioned, assume a 3-day trip
+- If no year is specified, assume the next available date (not in the past)
+
+If any information is missing, make a reasonable guess or use null.
 Format dates as YYYY-MM-DD.
 
 Return the output as a JSON object with these fields:
@@ -52,30 +68,49 @@ def extract_json_from_llm_response(text):
     Returns:
         Parsed JSON object or None if parsing fails
     """
+    logger.info(f"Attempting to extract JSON from text: {text[:100]}...")
+    
     # Try to find JSON between curly braces
     json_match = re.search(r'(\{.*\})', text, re.DOTALL)
     
     if json_match:
         try:
             # Parse the JSON
-            return json.loads(json_match.group(1))
-        except json.JSONDecodeError:
-            pass
+            json_str = json_match.group(1)
+            logger.info(f"Found JSON pattern: {json_str[:100]}...")
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSONDecodeError with curly brace pattern: {str(e)}")
     
     # Try to find JSON in code blocks
     code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
     if code_block_match:
         try:
-            return json.loads(code_block_match.group(1))
-        except json.JSONDecodeError:
-            pass
+            json_str = code_block_match.group(1)
+            logger.info(f"Found JSON in code block: {json_str[:100]}...")
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSONDecodeError with code block pattern: {str(e)}")
     
     # Try to parse the whole text as JSON
     try:
+        logger.info("Trying to parse entire text as JSON")
         return json.loads(text)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.error(f"JSONDecodeError parsing whole text: {str(e)}")
     
+    # Try a more aggressive approach to find any JSON-like structure
+    try:
+        start_idx = text.find('{')
+        end_idx = text.rfind('}')
+        if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+            json_str = text[start_idx:end_idx+1]
+            logger.info(f"Aggressive JSON extraction found: {json_str[:100]}...")
+            return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSONDecodeError with aggressive extraction: {str(e)}")
+    
+    logger.error("Failed to extract any valid JSON from the response")
     return None
 
 async def intent_parser_node(state: GraphState) -> GraphState:
@@ -91,58 +126,114 @@ async def intent_parser_node(state: GraphState) -> GraphState:
     # Get the user query
     user_query = state.get("raw_query", "")
     
+    logger.info(f"Processing user query: '{user_query}'")
+    
     if not user_query:
+        logger.error("No user query provided")
         state["error"] = "No user query provided"
         return state
     
     # Initialize LLM
-    llm = ChatAnthropic(
-        model="claude-3-haiku-20240307",
-        temperature=0.2,
-        max_tokens=1000
-    )
+    try:
+        llm = ChatAnthropic(
+            model="claude-3-haiku-20240307",
+            temperature=0.2,
+            max_tokens=1000
+        )
+        
+        logger.info("Successfully initialized ChatAnthropic")
+    except Exception as e:
+        logger.error(f"Error initializing ChatAnthropic: {str(e)}")
+        state["error"] = f"Error initializing LLM: {str(e)}"
+        return state
     
     # Use Claude to extract intent
     try:
-        response = await llm.ainvoke(
-            INTENT_PARSER_PROMPT.format(query=user_query)
-        )
+        logger.info("Sending prompt to Claude")
+        prompt = INTENT_PARSER_PROMPT.format(query=user_query)
+        logger.info(f"Prompt length: {len(prompt)} characters")
+        
+        response = await llm.ainvoke(prompt)
         
         # Parse the response content (expecting JSON)
         content = response.content
+        logger.info(f"Received response from Claude: {content[:100]}...")
         
         # Extract JSON from the response
         intent_data = extract_json_from_llm_response(content)
         
         if not intent_data:
+            logger.error("Failed to extract valid JSON from Claude's response")
             state["error"] = "Failed to parse intent: Invalid JSON format in response"
             return state
+        
+        logger.info(f"Successfully parsed intent data: {intent_data}")
         
         # Convert date strings to datetime objects if present
         try:
             if intent_data.get("start_date"):
-                intent_data["start_date"] = datetime.fromisoformat(intent_data["start_date"])
+                logger.info(f"Converting start_date: {intent_data['start_date']}")
+                try:
+                    intent_data["start_date"] = datetime.fromisoformat(intent_data["start_date"])
+                    logger.info(f"Converted start_date to: {intent_data['start_date']}")
+                except ValueError as e:
+                    logger.error(f"Error converting start_date: {str(e)}")
+                    # Try to parse in another format
+                    try:
+                        from dateutil import parser
+                        intent_data["start_date"] = parser.parse(intent_data["start_date"])
+                        logger.info(f"Converted start_date using dateutil to: {intent_data['start_date']}")
+                    except Exception as e2:
+                        logger.error(f"Failed to parse start_date with dateutil: {str(e2)}")
+                        # Keep as string if it's still there
+                        if isinstance(intent_data.get("start_date"), str):
+                            logger.info("Keeping start_date as string")
+                        else:
+                            intent_data["start_date"] = None
             
             if intent_data.get("end_date"):
-                intent_data["end_date"] = datetime.fromisoformat(intent_data["end_date"])
+                logger.info(f"Converting end_date: {intent_data['end_date']}")
+                try:
+                    intent_data["end_date"] = datetime.fromisoformat(intent_data["end_date"])
+                    logger.info(f"Converted end_date to: {intent_data['end_date']}")
+                except ValueError as e:
+                    logger.error(f"Error converting end_date: {str(e)}")
+                    # Try to parse in another format
+                    try:
+                        from dateutil import parser
+                        intent_data["end_date"] = parser.parse(intent_data["end_date"])
+                        logger.info(f"Converted end_date using dateutil to: {intent_data['end_date']}")
+                    except Exception as e2:
+                        logger.error(f"Failed to parse end_date with dateutil: {str(e2)}")
+                        # Keep as string if it's still there
+                        if isinstance(intent_data.get("end_date"), str):
+                            logger.info("Keeping end_date as string")
+                        else:
+                            intent_data["end_date"] = None
             
-            # Create a TripMetadata instancexx
+            # Create a TripMetadata instance
+            logger.info("Creating TripMetadata instance")
             trip_metadata = TripMetadata(
-                source=intent_data.get("source", ""),
-                destination=intent_data.get("destination", ""),
+                source=intent_data.get("source", "Unknown"),
+                destination=intent_data.get("destination", "Unknown"),
                 start_date=intent_data.get("start_date", None),
                 end_date=intent_data.get("end_date", None),
                 num_people=intent_data.get("num_people", 1),
                 preferences=intent_data.get("preferences", [])
             )
             
+            logger.info(f"Created TripMetadata: {trip_metadata}")
+            
             # Add to state
             state["metadata"] = trip_metadata
+            logger.info("Successfully added metadata to state")
             
         except Exception as e:
+            logger.error(f"Error processing intent data: {str(e)}")
             state["error"] = f"Failed to process intent data: {str(e)}"
         
     except Exception as e:
+        logger.error(f"Error in LLM processing: {str(e)}")
         state["error"] = f"Failed to parse intent: {str(e)}"
     
     return state

@@ -1,14 +1,20 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from pydantic import BaseModel
-from app.graph.trip_planner_graph_mock import TripPlannerGraphMock
+from app.graph.trip_planner_graph import TripPlannerGraph
 from app.schemas.trip_schema import TripData
 from typing import Optional, List, Dict, Any
 import tempfile
 import os
 import shutil
+import uuid
 from endpoints.services.llm_service import parse_user_input
 from endpoints.services.speech_to_text import transcribe_audio
 from fastapi.middleware.cors import CORSMiddleware
+
+# Import our consolidated validator
+from app.nodes.trip_validator_node import trip_validator_node, process_user_response
+from app.nodes.chat_input_node import chat_input_node
+from app.nodes.intent_parser_node import intent_parser_node
 
 app = FastAPI(title="AI Travel Planner")
 
@@ -21,7 +27,10 @@ app.add_middleware(
 )
 
 # Initialize the graph
-trip_planner = TripPlannerGraphMock()
+trip_planner = TripPlannerGraph()
+
+# Dictionary to store conversation states
+conversation_states = {}
 
 class ChatRequest(BaseModel):
     """Request model for chat-based interactions."""
@@ -37,6 +46,8 @@ class ChatResponse(BaseModel):
     validation_errors: Optional[list] = None
     conversation_id: Optional[str] = None
     suggestions: Optional[List[str]] = None
+    next_question: Optional[str] = None
+    interactive_mode: Optional[bool] = None
 
 class ChatMessageHistory(BaseModel):
     """Model for chat message history."""
@@ -60,6 +71,7 @@ class AnalyzeInputRequest(BaseModel):
 async def chat_query(request: ChatRequest):
     """
     Process a natural language query through the travel planning pipeline.
+    Provides an interactive experience by asking follow-up questions if needed.
     
     Example:
     ```
@@ -67,28 +79,109 @@ async def chat_query(request: ChatRequest):
     ```
     """
     try:
-        result = await trip_planner.process(request.query)
+        # Check if conversation exists
+        if request.conversation_id and request.conversation_id in conversation_states:
+            # Get existing state
+            state = conversation_states[request.conversation_id]
+            
+            # Check if we're in interactive mode
+            if state.get("interactive_mode") and state.get("missing_fields"):
+                # Process the user response to a previous question
+                state = await process_user_response(state, request.query)
+                
+                # Save the updated state
+                conversation_states[request.conversation_id] = state
+                
+                # If we're still in interactive mode, return the next question
+                if state.get("interactive_mode") and state.get("next_question"):
+                    return ChatResponse(
+                        conversation_id=request.conversation_id,
+                        interactive_mode=True,
+                        next_question=state["next_question"]
+                    )
+                
+                # If validation is now complete, continue with processing
+                if state.get("is_valid"):
+                    result = await trip_planner.process_with_state(state)
+                    
+                    # Clean up the conversation state
+                    if request.conversation_id in conversation_states:
+                        del conversation_states[request.conversation_id]
+                    
+                    return ChatResponse(
+                        itinerary=result.get("itinerary"),
+                        is_valid=True,
+                        conversation_id=request.conversation_id,
+                        suggestions=result.get("next_suggestions", [])
+                    )
+            
+            # Not in interactive mode but has a valid conversation - handle as a new query
+            # Reset the state for a new query in the same conversation
+            state = {"query": request.query}
+        else:
+            # New conversation
+            conversation_id = request.conversation_id or str(uuid.uuid4())
+            state = {"query": request.query}
+            request.conversation_id = conversation_id
         
-        # Handle validation errors
-        if not result.get("is_valid", True):
+        # Begin processing the query
+        state = await chat_input_node(state)
+        state = await intent_parser_node(state)
+        
+        # Check if we need to validate with interactive mode
+        state["interactive_mode"] = True  # Enable interactive mode
+        state = await trip_validator_node(state)
+        
+        # If we need more information, enter interactive mode
+        if not state.get("is_valid", False) and state.get("interactive_mode") and state.get("next_question"):
+            # Save the state for future interactions
+            conversation_states[request.conversation_id] = state
+            
+            # Return the question for the missing field
             return ChatResponse(
-                error="Invalid trip parameters",
-                is_valid=False,
-                validation_errors=result.get("validation_errors", ["Unknown validation error"]),
                 conversation_id=request.conversation_id,
-                suggestions=["Try specifying dates in MM/DD/YYYY format", 
-                             "Make sure to include your destination",
-                             "Specify the number of travelers"]
+                interactive_mode=True,
+                next_question=state["next_question"],
+                is_valid=False
             )
         
+        # If validation succeeded, proceed with the pipeline
+        if state.get("is_valid", False):
+            result = await trip_planner.process_with_state(state)
+            
+            return ChatResponse(
+                itinerary=result.get("itinerary"),
+                is_valid=True,
+                conversation_id=request.conversation_id,
+                suggestions=result.get("next_suggestions", [])
+            )
+        
+        # Handle validation errors (if not in interactive mode)
         return ChatResponse(
-            itinerary=result.get("itinerary"),
-            is_valid=True,
+            error="Invalid trip parameters",
+            is_valid=False,
+            validation_errors=state.get("validation_errors", ["Unknown validation error"]),
             conversation_id=request.conversation_id,
-            suggestions=result.get("next_suggestions", [])
+            suggestions=["Try specifying dates in MM/DD/YYYY format", 
+                        "Make sure to include your destination",
+                        "Specify the number of travelers"]
         )
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/conversations")
+async def list_conversations():
+    """List all active conversation IDs."""
+    return {"conversations": list(conversation_states.keys())}
+
+@app.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation state."""
+    if conversation_id in conversation_states:
+        del conversation_states[conversation_id]
+        return {"message": f"Conversation {conversation_id} deleted"}
+    raise HTTPException(status_code=404, detail="Conversation not found")
 
 @app.post("/generate-itinerary")
 async def generate_itinerary(trip_data: TripData):
@@ -107,9 +200,10 @@ async def root():
     return {
         "message": "Welcome to AI Travel Planner API",
         "endpoints": {
-            "/chat": "For natural language queries",
+            "/chat": "For natural language queries with interactive follow-up",
             "/generate-itinerary": "For structured trip data",
-            "/conversations/{conversation_id}": "Get chat history",
+            "/conversations": "List all active conversations",
+            "/conversations/{conversation_id}": "Get or delete a conversation",
             "/trips": "Get saved trips",
             "/trips/{trip_id}": "Get specific trip details"
         }
@@ -119,8 +213,6 @@ async def root():
 async def create_conversation():
     """Create a new conversation and return the conversation ID."""
     try:
-        # In a real implementation, you would generate a unique ID and store in database
-        import uuid
         conversation_id = str(uuid.uuid4())
         return {"conversation_id": conversation_id}
     except Exception as e:
@@ -130,8 +222,12 @@ async def create_conversation():
 async def get_conversation_history(conversation_id: str):
     """Get message history for a specific conversation."""
     try:
+        # Check if we have an active conversation with this ID
+        if conversation_id in conversation_states and "conversation_history" in conversation_states[conversation_id]:
+            # Return actual conversation history
+            return conversation_states[conversation_id]["conversation_history"]
+        
         # Mock implementation - would fetch from database in production
-        # Return mock data for now
         return [
             {
                 "role": "user",
@@ -282,4 +378,9 @@ async def voice_input(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path) 
+            os.remove(temp_path)
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting AI Travel Planner API on port 8000...")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True) 

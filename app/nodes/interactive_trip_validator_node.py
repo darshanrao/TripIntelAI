@@ -4,6 +4,16 @@ from datetime import datetime, timedelta
 import re
 from pydantic import ValidationError
 
+# Import enhanced extractors
+from app.nodes.enhanced_extractor import (
+    enhanced_date_extraction, 
+    enhanced_number_extraction,
+    enhanced_location_extraction
+)
+
+# Import enhanced conversation handler
+from app.nodes.enhanced_conversation_handler import ConversationHandler
+
 # Define what fields are required for a valid trip
 REQUIRED_FIELDS = {
     "source": "Where will you be starting your trip from?",
@@ -20,6 +30,9 @@ OPTIONAL_FIELDS = {
     "accommodation_type": "What type of accommodation are you looking for? (e.g., hotel, hostel, rental)",
 }
 
+# Initialize the conversation handler
+conversation_handler = ConversationHandler()
+
 async def interactive_trip_validator_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Interactive trip validator that checks for required fields and asks
@@ -32,13 +45,30 @@ async def interactive_trip_validator_node(state: Dict[str, Any]) -> Dict[str, An
         Updated state with is_valid flag, any validation errors, and 
         potentially enhanced metadata from user interaction
     """
+    # Initialize conversation history if not present
+    if "conversation_history" not in state:
+        state["conversation_history"] = []
+    
+    # Record the initial query if it's the first interaction
+    if len(state["conversation_history"]) == 0 and "query" in state:
+        conversation_handler.add_to_history("user", state["query"])
+        state["conversation_history"] = conversation_handler.conversation_history
+    
     # Check if we already have metadata from previous parsing
     if "metadata" not in state or not state["metadata"]:
         state["is_valid"] = False
         state["validation_errors"] = ["No trip metadata found. Please provide trip details."]
         state["missing_fields"] = list(REQUIRED_FIELDS.keys())
         state["interactive_mode"] = True
-        state["next_question"] = "I need some details to plan your trip. " + REQUIRED_FIELDS["source"]
+        
+        # Generate conversational first question
+        first_question = await conversation_handler.generate_question("source", type('obj', (object,), {}), [])
+        state["next_question"] = first_question
+        
+        # Record the assistant's question
+        conversation_handler.add_to_history("assistant", first_question)
+        state["conversation_history"] = conversation_handler.conversation_history
+        
         return state
     
     metadata = state["metadata"]
@@ -74,9 +104,9 @@ async def interactive_trip_validator_node(state: Dict[str, Any]) -> Dict[str, An
                 
         except ValueError:
             validation_errors.append("Dates must be in MM/DD/YYYY format")
-            if "start_date" in missing_fields:
+            if "start_date" not in missing_fields:
                 missing_fields.append("start_date")
-            if "end_date" in missing_fields:
+            if "end_date" not in missing_fields:
                 missing_fields.append("end_date")
     
     # Validate num_people if present
@@ -97,18 +127,26 @@ async def interactive_trip_validator_node(state: Dict[str, Any]) -> Dict[str, An
         state["missing_fields"] = missing_fields
         state["interactive_mode"] = True
         
-        # Determine the next question to ask
+        # Track what fields we've already asked about
+        previous_fields = [field for field in REQUIRED_FIELDS if field not in missing_fields]
+        
+        # Determine the next question to ask using the conversational handler
         next_field = missing_fields[0]
-        next_question = REQUIRED_FIELDS.get(next_field, f"Please provide {next_field}")
-        
-        # Make the question more conversational
-        next_question = _make_conversational(next_question, metadata)
-        
+        next_question = await conversation_handler.generate_question(next_field, metadata, previous_fields)
         state["next_question"] = next_question
+        
+        # Record the assistant's question
+        conversation_handler.add_to_history("assistant", next_question)
+        state["conversation_history"] = conversation_handler.conversation_history
     else:
         # All required fields are present and valid
         state["is_valid"] = True
         state["interactive_mode"] = False
+        
+        # Add a completion message to the conversation
+        completion_message = f"Great! I have all the details I need for your trip to {metadata.destination}."
+        conversation_handler.add_to_history("assistant", completion_message)
+        state["conversation_history"] = conversation_handler.conversation_history
         
         # Check for optional fields and add suggestions
         suggestions = []
@@ -121,36 +159,6 @@ async def interactive_trip_validator_node(state: Dict[str, Any]) -> Dict[str, An
             state["suggestions"] = suggestions
     
     return state
-
-def _make_conversational(question: str, metadata) -> str:
-    """Make the question more conversational by including context from existing metadata."""
-    
-    # Add destination context if available
-    if hasattr(metadata, "destination") and metadata.destination:
-        if "start_date" in question.lower():
-            return f"I see you're planning a trip to {metadata.destination}. {question}"
-        elif "end_date" in question.lower():
-            return f"Great! And when will you be returning from {metadata.destination}? {question}"
-        elif "num_people" in question.lower():
-            return f"How many people will be traveling to {metadata.destination}?"
-        elif "preferences" in question.lower():
-            return f"What activities or attractions are you interested in during your stay in {metadata.destination}?"
-    
-    # Add timing context if available
-    if hasattr(metadata, "start_date") and metadata.start_date:
-        if "end_date" in question.lower():
-            return f"I see you'll start your trip on {metadata.start_date}. When will you be returning? {question}"
-    
-    # Add group size context if available  
-    if hasattr(metadata, "num_people") and metadata.num_people:
-        if "preferences" in question.lower():
-            return f"For your group of {metadata.num_people}, what activities or attractions would you be interested in?"
-    
-    # Default to the original question with a friendly prefix
-    if question in REQUIRED_FIELDS.values():
-        return f"I need a bit more information to plan your perfect trip. {question}"
-    
-    return question
 
 async def process_user_response(state: Dict[str, Any], user_response: str) -> Dict[str, Any]:
     """
@@ -167,46 +175,145 @@ async def process_user_response(state: Dict[str, Any], user_response: str) -> Di
         # Not in interactive mode or no missing fields to process
         return state
     
+    # Record the user's response
+    conversation_handler.add_to_history("user", user_response)
+    state["conversation_history"] = conversation_handler.conversation_history
+    
     missing_fields = state["missing_fields"]
     current_field = missing_fields[0]
     metadata = state["metadata"]
     
-    # Process the response based on the field type
+    # Check if the user's response indicates flexibility
+    is_flexible = await conversation_handler.is_flexible_response(user_response)
+    
+    if is_flexible:
+        # Handle the flexible response
+        flexibility_result = await conversation_handler.handle_flexible_response(
+            current_field, user_response, metadata
+        )
+        
+        if flexibility_result["is_flexible"]:
+            # Use the suggested value
+            if current_field == "source":
+                metadata.source = flexibility_result["suggested_value"]
+            elif current_field == "destination":
+                metadata.destination = flexibility_result["suggested_value"]
+            elif current_field == "start_date":
+                metadata.start_date = flexibility_result["suggested_value"]
+            elif current_field == "end_date":
+                metadata.end_date = flexibility_result["suggested_value"]
+            elif current_field == "num_people":
+                metadata.num_people = flexibility_result["suggested_value"]
+            elif current_field == "preferences":
+                metadata.preferences = flexibility_result["suggested_value"]
+            
+            # Add an explanation to the conversation
+            explanation = flexibility_result["explanation"]
+            conversation_handler.add_to_history("assistant", explanation)
+            state["conversation_history"] = conversation_handler.conversation_history
+            
+            # Remove the processed field from missing_fields
+            missing_fields.pop(0)
+            
+            # Update the state
+            state["metadata"] = metadata
+            state["missing_fields"] = missing_fields
+            
+            # If there are still missing fields, prepare the next question
+            if missing_fields:
+                next_field = missing_fields[0]
+                previous_fields = [field for field in REQUIRED_FIELDS if field not in missing_fields and field != next_field]
+                next_question = await conversation_handler.generate_question(next_field, metadata, previous_fields)
+                
+                state["next_question"] = next_question
+                
+                # Record the assistant's question
+                conversation_handler.add_to_history("assistant", next_question)
+                state["conversation_history"] = conversation_handler.conversation_history
+            else:
+                # All required fields have been provided, re-validate
+                return await interactive_trip_validator_node(state)
+            
+            return state
+    
+    # Process the response based on the field type (for non-flexible responses)
     if current_field == "source":
-        metadata.source = user_response.strip()
+        # Try enhanced location extraction first
+        location = await enhanced_location_extraction(user_response, "source")
+        if location:
+            metadata.source = location
+        else:
+            # Fall back to basic extraction
+            metadata.source = user_response.strip()
     
     elif current_field == "destination":
-        metadata.destination = user_response.strip()
+        # Try enhanced location extraction first
+        location = await enhanced_location_extraction(user_response, "destination")
+        if location:
+            metadata.destination = location
+        else:
+            # Fall back to basic extraction
+            metadata.destination = user_response.strip()
     
     elif current_field == "start_date":
-        # Try to parse date from various formats
-        date = _extract_date(user_response)
+        # Create context for date extraction
+        context = {}
+        if hasattr(metadata, "destination") and metadata.destination:
+            context["destination"] = metadata.destination
+        
+        # Try enhanced date extraction first
+        date = await enhanced_date_extraction(user_response, "start_date", context)
         if date:
             metadata.start_date = date
         else:
-            # Keep this field in missing_fields and inform the user
-            return _create_date_error_response(state, "start_date")
+            # Fall back to regex pattern matching
+            date = _extract_date(user_response)
+            if date:
+                metadata.start_date = date
+            else:
+                # Keep this field in missing_fields and inform the user
+                return _create_date_error_response(state, "start_date")
     
     elif current_field == "end_date":
-        # Try to parse date from various formats
-        date = _extract_date(user_response)
+        # Create context for date extraction
+        context = {}
+        if hasattr(metadata, "destination") and metadata.destination:
+            context["destination"] = metadata.destination
+        if hasattr(metadata, "start_date") and metadata.start_date:
+            context["start_date"] = metadata.start_date
+        
+        # Try enhanced date extraction first
+        date = await enhanced_date_extraction(user_response, "end_date", context)
         if date:
             metadata.end_date = date
         else:
-            # Keep this field in missing_fields and inform the user
-            return _create_date_error_response(state, "end_date")
+            # Fall back to regex pattern matching
+            date = _extract_date(user_response)
+            if date:
+                metadata.end_date = date
+            else:
+                # Keep this field in missing_fields and inform the user
+                return _create_date_error_response(state, "end_date")
     
     elif current_field == "num_people":
-        # Try to extract a number
-        num = _extract_number(user_response)
+        # Try enhanced number extraction first
+        num = await enhanced_number_extraction(user_response)
         if num:
             metadata.num_people = num
         else:
-            # Keep this field in missing_fields and inform the user
-            return {
-                **state,
-                "next_question": "I need a valid number of travelers. How many people will be on this trip?"
-            }
+            # Fall back to basic extraction
+            num = _extract_number(user_response)
+            if num:
+                metadata.num_people = num
+            else:
+                # Keep this field in missing_fields and inform the user
+                error_msg = "I need a valid number of travelers. How many people will be on this trip?"
+                conversation_handler.add_to_history("assistant", error_msg)
+                state["conversation_history"] = conversation_handler.conversation_history
+                return {
+                    **state,
+                    "next_question": error_msg
+                }
     
     elif current_field == "preferences":
         # Extract preferences as a list
@@ -220,12 +327,23 @@ async def process_user_response(state: Dict[str, Any], user_response: str) -> Di
     state["metadata"] = metadata
     state["missing_fields"] = missing_fields
     
+    # Add an acknowledgment to the conversation if a field was successfully processed
+    if len(conversation_handler.response_variety["acknowledgments"]) > 0:
+        import random
+        ack = random.choice(conversation_handler.response_variety["acknowledgments"])
+        conversation_handler.add_to_history("assistant", ack)
+    
     # If there are still missing fields, prepare the next question
     if missing_fields:
         next_field = missing_fields[0]
-        next_question = REQUIRED_FIELDS.get(next_field, f"Please provide {next_field}")
-        next_question = _make_conversational(next_question, metadata)
+        previous_fields = [field for field in REQUIRED_FIELDS if field not in missing_fields and field != next_field]
+        next_question = await conversation_handler.generate_question(next_field, metadata, previous_fields)
+        
         state["next_question"] = next_question
+        
+        # Record the assistant's question
+        conversation_handler.add_to_history("assistant", next_question)
+        state["conversation_history"] = conversation_handler.conversation_history
     else:
         # All required fields have been provided, re-validate
         return await interactive_trip_validator_node(state)
@@ -315,9 +433,15 @@ def _extract_number(text: str) -> Optional[int]:
 def _create_date_error_response(state: Dict[str, Any], date_field: str) -> Dict[str, Any]:
     """Create a response for date parsing errors."""
     field_name = "start date" if date_field == "start_date" else "end date"
+    error_msg = f"I couldn't understand that date format. Could you please provide the {field_name} again? You can use formats like MM/DD/YYYY or month names like 'May 15, 2025'."
+    
+    # Record the error in the conversation history
+    conversation_handler.add_to_history("assistant", error_msg)
+    state["conversation_history"] = conversation_handler.conversation_history
+    
     return {
         **state,
-        "next_question": f"I couldn't understand that date format. Please provide the {field_name} in MM/DD/YYYY format, for example 05/15/2025."
+        "next_question": error_msg
     }
 
 # Example usage in a chat loop
