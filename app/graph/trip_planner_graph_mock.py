@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from mock_intent_parser import mock_intent_parser
 from app.nodes.trip_validator_node import trip_validator_node
 from app.nodes.planner_node import planner_node
-from app.nodes.agent_nodes_1 import (
+from app.nodes.agent_nodes import (
     flights_node, route_node, places_node, restaurants_node, 
     hotel_node, budget_node
 )

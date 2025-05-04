@@ -2,7 +2,7 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from app.nodes.agent_nodes_1 import flights_node
+from app.nodes.agent_nodes import flights_node
 from app.schemas.trip_schema import TripMetadata
 
 # Load environment variables
