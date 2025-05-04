@@ -13,11 +13,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import time
 from pathlib import Path
+<<<<<<< Updated upstream
 
 # Import our consolidated validator
 from app.nodes.trip_validator_node import trip_validator_node, process_user_response
 from app.nodes.chat_input_node import chat_input_node
 from app.nodes.intent_parser_node import intent_parser_node
+=======
+>>>>>>> Stashed changes
 
 app = FastAPI(title="AI Travel Planner")
 
@@ -34,6 +37,10 @@ trip_planner = TripPlannerGraph()
 
 # Dictionary to store conversation states
 conversation_states = {}
+
+# Create a dedicated audio directory
+AUDIO_DIR = Path("audio_files")
+AUDIO_DIR.mkdir(exist_ok=True)
 
 # Create a dedicated audio directory
 AUDIO_DIR = Path("audio_files")
@@ -407,6 +414,7 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
         raise HTTPException(status_code=500, detail=str(e))
     finally:
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
@@ -415,6 +423,8 @@ if __name__ == "__main__":
     print("Starting AI Travel Planner API on port 8000...")
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True) 
 =======
+=======
+>>>>>>> Stashed changes
         # Clean up the temporary file if it still exists and we're not in debug mode
         if temp_path and os.path.exists(temp_path) and not keep_debug_files:
             os.remove(temp_path)
@@ -501,5 +511,9 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
             "success": False,
             "response": "There was an error processing your audio. Please try again.",
             "error": str(e)
+<<<<<<< Updated upstream
+        } 
+>>>>>>> Stashed changes
+=======
         } 
 >>>>>>> Stashed changes
