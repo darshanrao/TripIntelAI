@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global styles */
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
+    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Chat bubble animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-bubble {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+/* Map route animation */
+@keyframes drawRoute {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.route-path {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawRoute 2s linear forwards;
+}
+
+/* Timeline scroll snap */
+.timeline-container {
+  scroll-snap-type: y proximity;
+}
+
+.timeline-item {
+  scroll-snap-align: start;
+}
+
+/* Typing animation dots */
+.typing-dots span {
+  animation-name: typing;
+  animation-duration: 1.5s;
+  animation-iteration-count: infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Day tabs transition */
+.day-tabs button {
+  transition: all 0.3s ease;
+}
+
+.day-tabs button.active {
+  transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+  .day-tabs {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+  
+  .day-tabs button {
+    scroll-snap-align: center;
+  }
+} 
