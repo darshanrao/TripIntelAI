@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FaMicrophone, FaPaperPlane, FaStop } from 'react-icons/fa';
-import { sendChatMessage, createConversation } from '../services/api';
+import { sendChatMessage, createConversation, saveAndProcessAudio } from '../services/api';
 
 const TypingIndicator = () => (
   <div className="flex items-center space-x-1 p-3 ml-2 bg-chat-ai rounded-lg max-w-xs shadow-sm typing-dots">
@@ -21,7 +21,11 @@ const ChatInterface = ({ onSendMessage }) => {
   const [conversationId, setConversationId] = useState(null);
   const messageEndRef = useRef(null);
   const chatContainerRef = useRef(null);
-  const recognitionRef = useRef(null);
+  
+  // Audio recording refs
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
 
   // Initialize conversation when component mounts
   useEffect(() => {
@@ -37,48 +41,227 @@ const ChatInterface = ({ onSendMessage }) => {
     initConversation();
   }, []);
 
-  // Speech recognition implementation
-  const startRecording = () => {
+  // Function to check supported MIME types, prioritizing MP3
+  const getSupportedMimeType = () => {
+    // Test and log all supported formats
+    const allTypes = [
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/webm',
+      'audio/webm;codecs=opus',
+      'audio/webm;codecs=mp3',
+      'audio/ogg;codecs=opus',
+      'audio/wav',
+      'audio/mp4'
+    ];
+    
+    console.log('Checking supported audio formats...');
+    allTypes.forEach(type => {
+      console.log(`${type}: ${MediaRecorder.isTypeSupported(type) ? 'Supported' : 'Not supported'}`);
+    });
+    
+    // Prefer MP3 format if supported
+    if (MediaRecorder.isTypeSupported('audio/mp3')) {
+      return 'audio/mp3';
+    }
+    if (MediaRecorder.isTypeSupported('audio/mpeg')) {
+      return 'audio/mpeg';
+    }
+    
+    // Fall back to these formats in order of preference
+    for (const type of allTypes) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        return type;
+      }
+    }
+    
+    // Final fallback
+    return 'audio/webm';
+  };
+
+  // Audio recording implementation
+  const startRecording = async () => {
     if (isRecording) return;
     
-    if (window.SpeechRecognition || window.webkitSpeechRecognition) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
+    try {
+      // Request microphone permission with specific constraints
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          channelCount: 1,
+          sampleRate: 44100,
+          echoCancellation: true,
+          noiseSuppression: true,
+        } 
+      });
+      streamRef.current = stream;
       
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
+      // Get supported MIME type
+      const mimeType = getSupportedMimeType();
+      console.log(`Using MIME type: ${mimeType}`);
       
-      recognitionRef.current.onresult = (event) => {
-        const transcript = Array.from(event.results)
-          .map(result => result[0])
-          .map(result => result.transcript)
-          .join('');
+      // Initialize the media recorder with proper MIME type
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        audioBitsPerSecond: 128000 // 128 kbps for better quality
+      });
+      mediaRecorderRef.current = mediaRecorder;
+      
+      // Clear previous chunks
+      audioChunksRef.current = [];
+      
+      // Handle data available event to collect audio chunks
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          console.log(`Received audio chunk: ${event.data.size} bytes`);
+          audioChunksRef.current.push(event.data);
+        } else {
+          console.warn('Received empty audio chunk');
+        }
+      };
+      
+      // Handle recording stop event to process the recording
+      mediaRecorder.onstop = async () => {
+        if (audioChunksRef.current.length === 0) {
+          console.error('No audio data collected');
+          setIsRecording(false);
+          return;
+        }
         
-        setInputText(transcript);
+        // Create audio blob from collected chunks with correct MIME type
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log(`Recording complete, blob size: ${audioBlob.size} bytes, chunks: ${audioChunksRef.current.length}`);
+        
+        if (audioBlob.size < 100) {
+          console.error('Audio recording too small, likely no data captured');
+          setMessages(prev => [...prev, {
+            id: Date.now() + 1,
+            text: "The recording was too short or no audio was captured. Please try again.",
+            sender: 'ai',
+            timestamp: new Date()
+          }]);
+          return;
+        }
+        
+        // Save the audio locally for debugging (optional)
+        try {
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          
+          // Log for debugging
+          console.log(`Audio URL created: ${audioUrl}`);
+          console.log(`You can listen to the recording in the console by running:
+            const audio = new Audio('${audioUrl}');
+            audio.play();
+          `);
+        } catch (error) {
+          console.error('Error creating audio URL:', error);
+        }
+        
+        // Show recording processing message
+        const processingMessage = {
+          id: Date.now(),
+          text: "Processing your voice message...",
+          sender: 'ai',
+          timestamp: new Date(),
+          isTemporary: true // Mark as temporary so we can remove it later
+        };
+        setMessages(prev => [...prev, processingMessage]);
+        
+        try {
+          // Send the audio to the backend
+          setIsTyping(true);
+          const response = await saveAndProcessAudio(audioBlob);
+          
+          // Remove the processing message
+          setMessages(prev => prev.filter(msg => !msg.isTemporary));
+          
+          // Handle the response from the new endpoint
+          console.log('Audio processing response:', response);
+          
+          if (response.success) {
+            // Add the transcription message
+            if (response.transcript) {
+              setMessages(prev => [...prev, {
+                id: Date.now(),
+                text: `I heard: "${response.transcript}"`,
+                sender: 'ai',
+                timestamp: new Date(),
+                isTranscript: true
+              }]);
+            }
+            
+            // Add AI response to chat
+            const aiResponse = {
+              id: Date.now() + 1,
+              text: response.response,
+              sender: 'ai',
+              timestamp: new Date()
+            };
+            
+            setMessages(prev => [...prev, aiResponse]);
+            
+            // Notify parent component with the transcript or response
+            onSendMessage(response.transcript || response.response);
+          } else {
+            // Error case
+            setMessages(prev => [...prev, {
+              id: Date.now() + 1,
+              text: response.response || "Sorry, I couldn't process your audio. Please try again.",
+              sender: 'ai',
+              timestamp: new Date()
+            }]);
+          }
+          
+          setIsTyping(false);
+        } catch (error) {
+          console.error('Error processing voice message:', error);
+          setIsTyping(false);
+          
+          // Add error message
+          setMessages(prev => prev.filter(msg => !msg.isTemporary));
+          setMessages(prev => [...prev, {
+            id: Date.now() + 1,
+            text: "Sorry, I had trouble understanding your voice message. Could you type it instead?",
+            sender: 'ai',
+            timestamp: new Date()
+          }]);
+        }
+        
+        // Stop all tracks on the stream
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
       };
       
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error', event);
-        setIsRecording(false);
-      };
-      
-      recognitionRef.current.onend = () => {
-        setIsRecording(false);
-      };
-      
-      recognitionRef.current.start();
+      // Start recording and request data at regular intervals (1 second)
+      mediaRecorder.start(1000);
       setIsRecording(true);
-    } else {
-      alert('Speech recognition is not supported in your browser.');
+      
+      // Add recording indicator message
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: "Recording audio...",
+        sender: 'user',
+        timestamp: new Date(),
+        isRecording: true // Special flag for recording indicator
+      }]);
+      
+    } catch (error) {
+      console.error('Error starting audio recording:', error);
+      alert('Could not access your microphone. Please check your browser permissions and try again.');
     }
   };
 
   const stopRecording = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
+    if (mediaRecorderRef.current && isRecording) {
+      // Stop the media recorder
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      // Remove the recording indicator message
+      setMessages(prev => prev.filter(msg => !msg.isRecording));
     }
-    setIsRecording(false);
   };
 
   // Auto-scroll to bottom when messages change
@@ -182,6 +365,17 @@ const ChatInterface = ({ onSendMessage }) => {
     }
   };
 
+  // Clean up when component unmounts
+  useEffect(() => {
+    return () => {
+      // Stop any ongoing recording when component unmounts
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Chat header */}
@@ -210,6 +404,8 @@ const ChatInterface = ({ onSendMessage }) => {
                     ? 'bg-primary text-white rounded-br-none' 
                     : 'bg-chat-ai rounded-bl-none'
                   }
+                  ${message.isTemporary ? 'opacity-60' : ''}
+                  ${message.isRecording ? 'animate-pulse' : ''}
                 `}
               >
                 <p className="text-sm">{message.text}</p>
@@ -240,6 +436,7 @@ const ChatInterface = ({ onSendMessage }) => {
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Type your message..."
             className="flex-1 rounded-full border border-gray-300 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={isRecording}
           />
           
           {isRecording ? (
@@ -261,6 +458,7 @@ const ChatInterface = ({ onSendMessage }) => {
           <button 
             onClick={handleSendMessage}
             className="bg-primary text-white p-3 rounded-full shadow-md hover:bg-blue-600 transition-colors"
+            disabled={isRecording}
           >
             <FaPaperPlane />
           </button>

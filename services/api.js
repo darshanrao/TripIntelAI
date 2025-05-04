@@ -76,6 +76,41 @@ export const getConversationHistory = async (conversationId) => {
 };
 
 /**
+ * Send audio recording to the backend
+ * @param {Blob} audioBlob - Recorded audio file as Blob
+ * @returns {Promise} - Promise with the response
+ */
+export const sendAudioMessage = async (audioBlob) => {
+  try {
+    // Create form data to send the file
+    const formData = new FormData();
+    
+    // Always use .mp3 extension and explicitly set the content type
+    const file = new File([audioBlob], 'recording.mp3', { 
+      type: 'audio/mpeg' 
+    });
+    
+    formData.append('file', file);
+    
+    console.log(`Sending audio file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
+
+    const response = await fetch(`${API_URL}/voice-input`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('API error sending audio:', error);
+    throw error;
+  }
+};
+
+/**
  * Save a trip
  * @param {Object} tripData - Trip data object
  * @param {string} name - Optional trip name
@@ -101,6 +136,41 @@ export const saveTrip = async (tripData, name = null) => {
     return await response.json();
   } catch (error) {
     console.error('API error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Send audio recording to the new save-audio endpoint
+ * @param {Blob} audioBlob - Recorded audio file as Blob
+ * @returns {Promise} - Promise with the response
+ */
+export const saveAndProcessAudio = async (audioBlob) => {
+  try {
+    // Create form data to send the file
+    const formData = new FormData();
+    
+    // Always use .mp3 extension and explicitly set content type
+    const file = new File([audioBlob], 'recording.mp3', { 
+      type: 'audio/mpeg' 
+    });
+    
+    formData.append('file', file);
+    
+    console.log(`Saving and processing audio file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
+
+    const response = await fetch(`${API_URL}/save-audio`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('API error processing audio:', error);
     throw error;
   }
 }; 
