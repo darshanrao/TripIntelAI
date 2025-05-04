@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FaMicrophone, FaPaperPlane, FaStop } from 'react-icons/fa';
-import { sendChatMessage, createConversation, saveAndProcessAudio } from '../services/api';
+import { sendChatMessage, createConversation, saveAndProcessAudio, selectFlight, continueProcessing } from '../services/api';
+import FlightSelection from './FlightSelection';
 
 const TypingIndicator = () => (
   <div className="flex items-center space-x-1 p-3 ml-2 bg-chat-ai rounded-lg max-w-xs shadow-sm typing-dots">
@@ -19,6 +20,7 @@ const ChatInterface = ({ onSendMessage }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState(null);
+  const [flightOptions, setFlightOptions] = useState(null);
   const messageEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   
@@ -269,6 +271,111 @@ const ChatInterface = ({ onSendMessage }) => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Handle flight selection
+  const handleFlightSelection = async (flightIndex) => {
+    if (!conversationId) {
+      console.error('No conversation ID available');
+      return;
+    }
+    
+    console.log(`Selected flight index: ${flightIndex}, conversation ID: ${conversationId}`);
+    
+    // Show typing indicator
+    setIsTyping(true);
+    
+    // Remove the flight selection cards from the chat messages
+    setMessages(prev => prev.filter(msg => !msg.isFlightSelection));
+
+    // Clear flight options state
+    setFlightOptions(null);
+    
+    try {
+      // Add immediate feedback message
+      setMessages(prev => [...prev, {
+        id: Date.now() - 1,
+        text: `Selected flight option ${flightIndex + 1}`,
+        sender: 'user',
+        timestamp: new Date()
+      }]);
+      
+      // Process the selected flight using the backend
+      console.log(`Calling selectFlight with index ${flightIndex}, conversationId ${conversationId}`);
+      const flightResponse = await selectFlight(flightIndex, conversationId);
+      console.log("Flight selection response:", flightResponse);
+      
+      // Add a message about the selected flight
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: flightResponse.message || `Flight selected. Continuing with your trip planning...`,
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      
+      // If we're in step-by-step mode, continue to process the rest of the trip
+      if (flightResponse.step_by_step && flightResponse.in_progress) {
+        // Add a message to indicate we're continuing
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1, 
+          text: "Generating your complete itinerary...",
+          sender: 'ai',
+          timestamp: new Date(),
+          isTemporary: true
+        }]);
+        
+        // Continue processing to get the final itinerary
+        console.log(`Calling continueProcessing with conversationId ${conversationId}`);
+        const finalResponse = await continueProcessing(conversationId);
+        console.log("Final itinerary response:", finalResponse);
+        
+        // Remove the temporary message
+        setMessages(prev => prev.filter(msg => !msg.isTemporary));
+        
+        // Check if we got a valid itinerary
+        if (finalResponse.itinerary) {
+          // Add the final itinerary to the chat
+          setMessages(prev => [...prev, {
+            id: Date.now() + 2,
+            text: finalResponse.itinerary,
+            sender: 'ai',
+            timestamp: new Date()
+          }]);
+        } else if (finalResponse.error) {
+          // Add the error message
+          setMessages(prev => [...prev, {
+            id: Date.now() + 2,
+            text: `Error completing itinerary: ${finalResponse.error}`,
+            sender: 'ai',
+            timestamp: new Date()
+          }]);
+        } else {
+          // Generic completion message
+          setMessages(prev => [...prev, {
+            id: Date.now() + 2,
+            text: "Your trip has been planned, but no detailed itinerary could be generated.",
+            sender: 'ai',
+            timestamp: new Date()
+          }]);
+        }
+      }
+      
+      // Hide typing indicator
+      setIsTyping(false);
+    } catch (error) {
+      console.error('Error selecting flight:', error);
+      
+      // Add error message
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: `Sorry, there was an error processing your flight selection: ${error.message}. Please try again.`,
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      
+      // Hide typing indicator
+      setIsTyping(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (inputText.trim() === '') return;
     
@@ -293,15 +400,43 @@ const ChatInterface = ({ onSendMessage }) => {
     try {
       // Send message to backend
       const response = await sendChatMessage(userMessageText, conversationId);
+      console.log("Response from sendChatMessage:", response);
       
       // Hide typing indicator
       setIsTyping(false);
+      
+      // Check if this is a flight selection request
+      if (response.selection_type === 'flight' && response.flight_options && response.flight_options.length > 0) {
+        console.log(`Received ${response.flight_options.length} flight options`);
+        
+        // Store flight options in state
+        setFlightOptions(response.flight_options);
+        
+        // First add a message asking to select flights
+        setMessages(prev => [...prev, {
+          id: Date.now() - 1,
+          text: response.next_question || "Please select a flight that best suits your needs:",
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+        
+        // Then add the flight selection UI to the chat
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          isFlightSelection: true,
+          flightOptions: response.flight_options,
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+        
+        return;
+      }
       
       // Prepare response text - handle complex objects
       let responseText = "";
       if (response.response) {
         if (typeof response.response === 'string') {
-          responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
+          responseText = response.response;
         } else {
           // It's an object, convert to readable text
           try {
@@ -330,7 +465,9 @@ const ChatInterface = ({ onSendMessage }) => {
           ? response.itinerary 
           : JSON.stringify(response.itinerary);
       } else if (response.error) {
-        responseText = response.error;
+        responseText = `Error: ${response.error}`;
+      } else if (response.message) {
+        responseText = response.message;
       } else {
         responseText = "I couldn't process that request. Can you try again?";
       }
@@ -395,24 +532,31 @@ const ChatInterface = ({ onSendMessage }) => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${message.isFlightSelection ? 'w-full' : message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div 
-                className={`
-                  max-w-xs rounded-lg p-3 shadow-sm chat-bubble
-                  ${message.sender === 'user' 
-                    ? 'bg-primary text-white rounded-br-none' 
-                    : 'bg-chat-ai rounded-bl-none'
-                  }
-                  ${message.isTemporary ? 'opacity-60' : ''}
-                  ${message.isRecording ? 'animate-pulse' : ''}
-                `}
-              >
-                <p className="text-sm">{message.text}</p>
-                <p className="text-xs mt-1 opacity-70">
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
+              {message.isFlightSelection ? (
+                <FlightSelection 
+                  flights={message.flightOptions} 
+                  onSelectFlight={handleFlightSelection}
+                />
+              ) : (
+                <div 
+                  className={`
+                    max-w-xs rounded-lg p-3 shadow-sm chat-bubble
+                    ${message.sender === 'user' 
+                      ? 'bg-primary text-white rounded-br-none' 
+                      : 'bg-chat-ai rounded-bl-none'
+                    }
+                    ${message.isTemporary ? 'opacity-60' : ''}
+                    ${message.isRecording ? 'animate-pulse' : ''}
+                  `}
+                >
+                  <p className="text-sm whitespace-pre-line">{message.text}</p>
+                  <p className="text-xs mt-1 opacity-70">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              )}
             </motion.div>
           ))}
           

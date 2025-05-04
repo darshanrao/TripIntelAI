@@ -1,18 +1,24 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 /**
- * Send a chat message to the backend (now uses /analyze-input)
+ * Send a chat message to the backend
  * @param {string} message - User's chat message
+ * @param {string} conversationId - Optional conversation ID
  * @returns {Promise} - Promise with the response
  */
-export const sendChatMessage = async (message) => {
+export const sendChatMessage = async (message, conversationId = null) => {
   try {
-    const response = await fetch(`${API_URL}/analyze-input`, {
+    // Use the /chat endpoint and add step_by_step flag
+    const response = await fetch(`${API_URL}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ input: message }),
+      body: JSON.stringify({ 
+        query: message,
+        conversation_id: conversationId,
+        step_by_step: true // Ensure step-by-step is sent
+      }),
     });
 
     if (!response.ok) {
@@ -171,6 +177,67 @@ export const saveAndProcessAudio = async (audioBlob) => {
     return await response.json();
   } catch (error) {
     console.error('API error processing audio:', error);
+    throw error;
+  }
+};
+
+/**
+ * Select a flight option from the presented choices
+ * @param {number} flightIndex - Index of the selected flight
+ * @param {string} conversationId - Conversation ID
+ * @returns {Promise} - Promise with the response containing the itinerary
+ */
+export const selectFlight = async (flightIndex, conversationId) => {
+  try {
+    const response = await fetch(`${API_URL}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        selection_type: 'flight',
+        selection_index: flightIndex,
+        conversation_id: conversationId,
+        step_by_step: true // Add this flag to indicate step-by-step mode
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('API error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Continue processing after flight selection
+ * @param {string} conversationId - Conversation ID
+ * @returns {Promise} - Promise with the response containing the itinerary
+ */
+export const continueProcessing = async (conversationId) => {
+  try {
+    const response = await fetch(`${API_URL}/continue-processing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        conversation_id: conversationId,
+        step_by_step: true
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('API error continuing processing:', error);
     throw error;
   }
 }; 

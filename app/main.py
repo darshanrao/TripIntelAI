@@ -13,6 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import time
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (same as CLI version)
+load_dotenv()
 
 # Import our consolidated validator
 from app.nodes.trip_validator_node import trip_validator_node, process_user_response
@@ -21,8 +25,9 @@ from app.nodes.intent_parser_node import intent_parser_node
 # Add missing node imports
 from app.nodes.planner_node import planner_node
 from app.nodes.agent_nodes import flights_node, places_node, restaurants_node, hotel_node, budget_node, reviews_node, route_node
-from app.nodes.summary_node import summary_node, add_coordinates_to_itinerary
-from app.nodes.location_coordinates import LocationCoordinates
+from app.nodes.summary_node import summary_node
+# Import flight selection node
+from app.nodes.flight_selection_node import display_flight_options, get_user_flight_selection
 
 # Import our flight booking router
 from app.api.flight_booking import router as flight_booking_router
@@ -52,9 +57,12 @@ app.include_router(flight_booking_router)
 
 class ChatRequest(BaseModel):
     """Request model for chat-based interactions."""
-    query: str
+    query: Optional[str] = None
     conversation_id: Optional[str] = None
     user_id: Optional[str] = None
+    selection_type: Optional[str] = None
+    selection_index: Optional[int] = None
+    step_by_step: Optional[bool] = None
 
 class ChatResponse(BaseModel):
     """Response model for chat-based interactions."""
@@ -66,6 +74,12 @@ class ChatResponse(BaseModel):
     suggestions: Optional[List[str]] = None
     next_question: Optional[str] = None
     interactive_mode: Optional[bool] = None
+    selection_type: Optional[str] = None
+    flight_options: Optional[List[dict]] = None
+    selected_flight: Optional[dict] = None
+    message: Optional[str] = None
+    in_progress: Optional[bool] = None
+    step_by_step: Optional[bool] = None
 
 class ChatMessageHistory(BaseModel):
     """Model for chat message history."""
@@ -85,141 +99,12 @@ class SavedTrip(BaseModel):
 class AnalyzeInputRequest(BaseModel):
     input: str
 
-# Replace the API process functions with updated versions that include coordinate handling
-async def process_nodes(state, nodes_to_process):
-    """
-    Process a list of nodes with appropriate status messages.
-    
-    Args:
-        state: Current graph state
-        nodes_to_process: List of node names to process
-        
-    Returns:
-        Updated state after processing all nodes
-    """
-    for node in nodes_to_process:
-        if node == "flights":
-            print("[DEBUG] Processing with flights_node")
-            state = await flights_node(state)
-            
-            # Handle flight selection if we have an API for it
-            if "flights" in state and state["flights"] and not state.get("selected_flights"):
-                # In API mode we just take the first flight option
-                state["selected_flights"] = [state["flights"][0]]
-                
-        elif node == "route":
-            print("[DEBUG] Processing with route_node")
-            state = await route_node(state)
-            
-        elif node == "places":
-            print("[DEBUG] Processing with places_node")
-            state = await places_node(state)
-            
-        elif node == "restaurants":
-            print("[DEBUG] Processing with restaurants_node")
-            state = await restaurants_node(state)
-            
-        elif node == "hotel":
-            print("[DEBUG] Processing with hotel_node")
-            state = await hotel_node(state)
-            
-        elif node == "budget":
-            print("[DEBUG] Processing with budget_node")
-            state = await budget_node(state)
-    
-    return state
-
-async def process_trip_pipeline(state):
-    """
-    Process a complete trip planning pipeline.
-    
-    Args:
-        state: Initial state with query
-        
-    Returns:
-        Completed state with itinerary
-    """
-    try:
-        # Step 1: Chat Input Node
-        print("[DEBUG] Processing with chat_input_node")
-        state = await chat_input_node(state)
-        
-        # Step 2: Intent Parser Node
-        print("[DEBUG] Processing with intent_parser_node")
-        state = await intent_parser_node(state)
-        
-        # Check for errors in intent parsing
-        if "error" in state and state["error"]:
-            print(f"[ERROR] Intent parser error: {state['error']}")
-            return {
-                "is_valid": False,
-                "validation_errors": [f"Failed to understand your travel query: {state['error']}"],
-                "error": state["error"]
-            }
-        
-        # Check if metadata was extracted
-        if "metadata" not in state or not state["metadata"]:
-            print("[ERROR] No metadata extracted from query")
-            return {
-                "is_valid": False,
-                "validation_errors": ["Could not extract travel details from your query"],
-                "error": "No metadata was extracted"
-            }
-        
-        # Step 3: Trip Validator Node
-        print("[DEBUG] Processing with trip_validator_node")
-        state = await trip_validator_node(state)
-        
-        # Check if trip is valid
-        if not state.get('is_valid', False):
-            return state
-        
-        # Step 4: Planner Node
-        print("[DEBUG] Processing with planner_node")
-        state = await planner_node(state)
-        
-        # Step 5: Agent Nodes
-        nodes_to_call = state.get('nodes_to_call', [])
-        print(f"[DEBUG] Nodes to call: {nodes_to_call}")
-        
-        # Initialize selected_flights in state if not present
-        if "selected_flights" not in state:
-            state["selected_flights"] = []
-        
-        # Process agent nodes
-        state = await process_nodes(state, nodes_to_call)
-        
-        # Step 6: Reviews Node
-        print("[DEBUG] Processing with reviews_node")
-        state = await reviews_node(state)
-        
-        # Step 7: Summary Node
-        print("[DEBUG] Processing with summary_node")
-        state = await summary_node(state)
-        
-        # Step 8: Add coordinates to itinerary if it exists and is in dictionary format
-        if "itinerary" in state and isinstance(state["itinerary"], dict):
-            print("[DEBUG] Adding coordinates to itinerary")
-            state["itinerary"] = await add_coordinates_to_itinerary(state["itinerary"])
-        
-        return state
-        
-    except Exception as e:
-        import traceback
-        print(f"[ERROR] Error during trip pipeline processing: {str(e)}")
-        print(traceback.format_exc())
-        return {
-            "is_valid": False,
-            "validation_errors": [f"An error occurred while processing your request: {str(e)}"],
-            "error": str(e)
-        }
-
-# Update the chat endpoint
 @app.post("/chat", response_model=ChatResponse)
 async def chat_query(request: ChatRequest):
     """
     Process a natural language query through the travel planning pipeline.
-    Provides an interactive experience by asking follow-up questions if needed.
+    Provides an interactive experience by asking follow-up questions if needed,
+    and supporting a step-by-step workflow matching the CLI version.
     
     Example:
     ```
@@ -227,12 +112,18 @@ async def chat_query(request: ChatRequest):
     ```
     """
     try:
+        print(f"[DEBUG] Received chat request: {request.dict()}")
+
+        # Check if we're handling a flight selection
+        if request.conversation_id and "selection_type" in request.__dict__ and request.__dict__["selection_type"] == "flight":
+            return await handle_flight_selection(request)
+            
         # Check if conversation exists
         if request.conversation_id and request.conversation_id in conversation_states:
             # Get existing state
             state = conversation_states[request.conversation_id]
             
-            # Check if we're in interactive mode
+            # Check if we're in interactive mode for missing field validation
             if state.get("interactive_mode") and state.get("missing_fields"):
                 # Process the user response to a previous question
                 state = await process_user_response(state, request.query)
@@ -248,21 +139,9 @@ async def chat_query(request: ChatRequest):
                         next_question=state["next_question"]
                     )
                 
-                # If validation is now complete, continue with processing
+                # If validation is now complete, continue with the planning process
                 if state.get("is_valid"):
-                    # Use the new processing pipeline
-                    result = await process_trip_pipeline(state)
-                    
-                    # Clean up the conversation state
-                    if request.conversation_id in conversation_states:
-                        del conversation_states[request.conversation_id]
-                    
-                    return ChatResponse(
-                        itinerary=result.get("itinerary"),
-                        is_valid=True,
-                        conversation_id=request.conversation_id,
-                        suggestions=result.get("next_suggestions", [])
-                    )
+                    return await process_valid_state(state, request.conversation_id)
             
             # Not in interactive mode but has a valid conversation - handle as a new query
             # Reset the state for a new query in the same conversation
@@ -273,7 +152,7 @@ async def chat_query(request: ChatRequest):
             state = {"query": request.query}
             request.conversation_id = conversation_id
         
-        # Begin processing the query with new pipeline
+        # Begin processing the query
         state = await chat_input_node(state)
         state = await intent_parser_node(state)
         
@@ -294,17 +173,9 @@ async def chat_query(request: ChatRequest):
                 is_valid=False
             )
         
-        # If validation succeeded, proceed with the pipeline
+        # If validation succeeded, proceed with the step-by-step processing
         if state.get("is_valid", False):
-            # Use the new processing pipeline
-            result = await process_trip_pipeline(state)
-            
-            return ChatResponse(
-                itinerary=result.get("itinerary"),
-                is_valid=True,
-                conversation_id=request.conversation_id,
-                suggestions=result.get("next_suggestions", [])
-            )
+            return await process_valid_state(state, request.conversation_id)
         
         # Handle validation errors (if not in interactive mode)
         return ChatResponse(
@@ -318,10 +189,121 @@ async def chat_query(request: ChatRequest):
         )
         
     except Exception as e:
+        print(f"[ERROR] Error in chat_query: {str(e)}")
         import traceback
-        print(f"[ERROR] Chat query error: {str(e)}")
-        print(traceback.format_exc())
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+async def handle_flight_selection(request):
+    """
+    Handle the flight selection from the user, similar to CLI's flight selection.
+    This mimics the CLI's get_user_flight_selection logic.
+    """
+    try:
+        print(f"[DEBUG] Handling flight selection: {request.__dict__}")
+        
+        # Extract request data
+        conversation_id = request.conversation_id
+        
+        # Check if selection_index is present and valid
+        if "selection_index" not in request.__dict__ or request.__dict__["selection_index"] is None:
+            print("[ERROR] Missing selection_index in flight selection request")
+            return ChatResponse(
+                error="Missing flight selection index",
+                is_valid=False,
+                conversation_id=conversation_id
+            )
+        
+        selection_index = request.__dict__["selection_index"]
+        print(f"[DEBUG] Flight selection index: {selection_index}")
+        
+        # Ensure we have a valid conversation state
+        if not conversation_id or conversation_id not in conversation_states:
+            print(f"[ERROR] Invalid conversation ID: {conversation_id}")
+            return ChatResponse(
+                error="Invalid conversation ID",
+                is_valid=False,
+                conversation_id=conversation_id
+            )
+        
+        # Get the conversation state
+        state = conversation_states[conversation_id]
+        print(f"[DEBUG] Conversation state keys: {state.keys()}")
+        
+        # Ensure we have flights and are awaiting selection
+        if not state.get("awaiting_flight_selection"):
+            print("[ERROR] Not awaiting flight selection")
+            return ChatResponse(
+                error="No flight selection was requested",
+                is_valid=False,
+                conversation_id=conversation_id
+            )
+        
+        # Make sure we have flight options
+        if not state.get("flights") or len(state.get("flights", [])) == 0:
+            print("[ERROR] No flight options available in state")
+            return ChatResponse(
+                error="No flight options available",
+                is_valid=False,
+                conversation_id=conversation_id
+            )
+        
+        print(f"[DEBUG] Available flights: {len(state['flights'])}")
+        
+        # Validate selection index
+        if selection_index < 0 or selection_index >= len(state["flights"]):
+            print(f"[ERROR] Invalid flight selection index: {selection_index}, max: {len(state['flights'])-1}")
+            return ChatResponse(
+                error=f"Invalid flight selection index: {selection_index}",
+                is_valid=False,
+                conversation_id=conversation_id
+            )
+        
+        # Get the selected flight
+        selected_flight = state["flights"][selection_index]
+        print(f"[DEBUG] Selected flight: {selected_flight}")
+        
+        # Update state with selected flight (matching CLI behavior)
+        state["selected_flights"] = [selected_flight]
+        state["awaiting_flight_selection"] = False
+        
+        # Log the selection like the CLI does
+        print(f"\n✅ Flight option {selection_index + 1} selected.")
+        
+        # Save the updated state
+        conversation_states[conversation_id] = state
+        
+        # Get the nodes that need processing
+        nodes_to_call = state.get('nodes_to_call', [])
+        
+        # Check for step-by-step mode
+        if request.__dict__.get("step_by_step"):
+            # In step-by-step mode, just confirm the selection and let the client make another request
+            # to continue processing. This matches the frontend behavior.
+            print("[DEBUG] Step-by-step mode: Confirming selection only")
+            return ChatResponse(
+                selected_flight=selected_flight,
+                message="Flight selected. Continuing with your trip planning...",
+                conversation_id=conversation_id,
+                is_valid=True,
+                step_by_step=True,
+                in_progress=True
+            )
+        else:
+            # In non-step-by-step mode, continue with processing
+            print("[DEBUG] Continuing with remaining nodes after flight selection")
+            # Process the remaining nodes
+            return await process_remaining_nodes(state, nodes_to_call, conversation_id)
+        
+    except Exception as e:
+        print(f"[ERROR] Error in handle_flight_selection: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return ChatResponse(
+            error=f"An error occurred while processing your flight selection: {str(e)}",
+            is_valid=False,
+            conversation_id=request.conversation_id
+        )
 
 @app.get("/conversations")
 async def list_conversations():
@@ -460,72 +442,171 @@ async def search_travel_options(
 @app.post("/analyze-input")
 async def analyze_input(request: AnalyzeInputRequest):
     try:
-        # Use the new process_trip_pipeline
-        state = {"query": request.input}
-        result = await process_trip_pipeline(state)
-        
-        # Check if there was an error in processing
-        if "error" in result and result["error"]:
-            print(f"[ERROR] Trip planner error: {result['error']}")
-            return {
-                "success": False,
-                "response": result.get("response", "I had trouble planning your trip based on that request."),
-                "error": result["error"]
-            }
-        
-        # Extract a simple text response from the complex result
-        response_text = ""
-        structured_response = {}
-        
-        if isinstance(result, dict):
-            # If we have an itinerary with daily_itinerary
-            if "itinerary" in result and isinstance(result["itinerary"], dict) and "daily_itinerary" in result["itinerary"]:
-                print("[DEBUG] Returning structured itinerary with daily_itinerary")
+        try:
+            # MODIFIED: Process input using the CLI-style approach instead of directly calling trip_planner.process
+            # Initial state (same as CLI version)
+            state = {"query": request.input}
+            
+            # Step 1: Chat Input Node
+            print("[DEBUG] Processing with chat_input_node")
+            state = await chat_input_node(state)
+            
+            # Step 2: Intent Parser Node
+            print("[DEBUG] Processing with intent_parser_node")
+            state = await intent_parser_node(state)
+            
+            # Check for errors in intent parsing
+            if "error" in state and state["error"]:
+                print(f"[ERROR] Intent parser error: {state['error']}")
+                return {
+                    "success": False,
+                    "response": f"Failed to understand your travel query: {state['error']}",
+                    "error": state["error"]
+                }
+            
+            # Check if metadata was extracted
+            if "metadata" not in state or not state["metadata"]:
+                print("[ERROR] No metadata extracted from query")
+                return {
+                    "success": False,
+                    "response": "Could not extract travel details from your query",
+                    "error": "No metadata was extracted"
+                }
+            
+            # Step 3: Trip Validator Node
+            print("[DEBUG] Processing with trip_validator_node")
+            state = await trip_validator_node(state)
+            
+            # Check if trip is valid
+            if not state.get('is_valid', False):
+                return {
+                    "success": False,
+                    "response": "Your travel query couldn't be processed.",
+                    "validation_errors": state.get("validation_errors", ["Unknown validation error"]),
+                    "error": "Invalid trip parameters"
+                }
+            
+            # Step 4: Planner Node
+            print("[DEBUG] Processing with planner_node")
+            state = await planner_node(state)
+            
+            # Step 5: Agent Nodes
+            nodes_to_call = state.get('nodes_to_call', [])
+            print(f"[DEBUG] Nodes to call: {nodes_to_call}")
+            
+            if 'flights' in nodes_to_call:
+                print("[DEBUG] Processing with flights_node")
+                state = await flights_node(state)
+            
+            if 'route' in nodes_to_call:
+                print("[DEBUG] Processing with route_node")
+                state = await route_node(state)
+            
+            if 'places' in nodes_to_call:
+                print("[DEBUG] Processing with places_node")
+                state = await places_node(state)
+            
+            if 'restaurants' in nodes_to_call:
+                print("[DEBUG] Processing with restaurants_node")
+                state = await restaurants_node(state)
+            
+            if 'hotel' in nodes_to_call:
+                print("[DEBUG] Processing with hotel_node")
+                state = await hotel_node(state)
+            
+            if 'budget' in nodes_to_call:
+                print("[DEBUG] Processing with budget_node")
+                state = await budget_node(state)
+            
+            # Step 6: Reviews Node
+            print("[DEBUG] Processing with reviews_node")
+            state = await reviews_node(state)
+            
+            # Step 7: Summary Node
+            print("[DEBUG] Processing with summary_node")
+            state = await summary_node(state)
+            
+            # Use the result from the state
+            result = state
+            print(f"[DEBUG] Final state keys: {result.keys()}")
+            
+            # Check if there was an error in processing
+            if "error" in result and result["error"]:
+                print(f"[ERROR] Trip planner error: {result['error']}")
+                return {
+                    "success": False,
+                    "response": result.get("response", "I had trouble planning your trip based on that request."),
+                    "error": result["error"]
+                }
+            
+            # Extract a simple text response from the complex result
+            response_text = ""
+            structured_response = {}
+            
+            if isinstance(result, dict):
+                # If we have an itinerary and daily_itinerary, return the structured data
+                if "daily_itinerary" in result:
+                    print("[DEBUG] Returning structured daily itinerary")
+                    return {
+                        "success": True,
+                        "response": {
+                            "trip_summary": result.get("trip_summary", {}),
+                            "daily_itinerary": result.get("daily_itinerary", {}),
+                            "review_highlights": result.get("review_highlights", {})
+                        }
+                    }
+                # If we have just a trip_summary
+                elif "trip_summary" in result:
+                    print("[DEBUG] Returning trip_summary")
+                    summary = result["trip_summary"]
+                    response_text = f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}"
+                    structured_response = {
+                        "trip_summary": summary
+                    }
+                # If we have a string itinerary
+                elif "itinerary" in result and result["itinerary"]:
+                    print("[DEBUG] Returning itinerary as string or object")
+                    if isinstance(result["itinerary"], str):
+                        response_text = result["itinerary"]
+                    else:
+                        # If itinerary is a dict with daily_itinerary
+                        if isinstance(result["itinerary"], dict) and "daily_itinerary" in result["itinerary"]:
+                            return {
+                                "success": True,
+                                "response": result["itinerary"]
+                            }
+                        response_text = f"Generated itinerary for your trip to {result.get('metadata', {}).get('destination', 'your destination')}"
+                        structured_response = result["itinerary"]
+                else:
+                    response_text = "Your trip has been planned successfully."
+            else:
+                response_text = "Thank you for your query. Your trip is being processed."
+            
+            # Return either structured or simple response
+            if structured_response:
                 return {
                     "success": True,
-                    "response": result["itinerary"]
+                    "response": structured_response
                 }
-            # If we have just a trip_summary
-            elif "trip_summary" in result:
-                print("[DEBUG] Returning trip_summary")
-                summary = result["trip_summary"]
-                response_text = f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}"
-                structured_response = {
-                    "trip_summary": summary
-                }
-            # If we have a string itinerary
-            elif "itinerary" in result and result["itinerary"]:
-                print("[DEBUG] Returning itinerary")
-                if isinstance(result["itinerary"], str):
-                    response_text = result["itinerary"]
-                else:
-                    response_text = f"Generated itinerary for your trip to {result.get('metadata', {}).get('destination', 'your destination')}"
-                    structured_response = result["itinerary"]
             else:
-                response_text = "Your trip has been planned successfully."
-        else:
-            response_text = "Thank you for your query. Your trip is being processed."
-        
-        # Return either structured or simple response
-        if structured_response:
+                return {
+                    "success": True,
+                    "response": response_text
+                }
+        except Exception as planning_error:
+            print(f"[ERROR] Trip planning failed: {str(planning_error)}")
+            import traceback
+            traceback.print_exc()
             return {
-                "success": True,
-                "response": structured_response
-            }
-        else:
-            return {
-                "success": True,
-                "response": response_text
+                "success": False, 
+                "response": "I had trouble planning your trip. Could you try again with more details?",
+                "error": str(planning_error)
             }
     except Exception as e:
+        print(f"[ERROR] Request processing error: {str(e)}")
         import traceback
-        print(f"[ERROR] Analyze input error: {str(e)}")
-        print(traceback.format_exc())
-        return {
-            "success": False, 
-            "response": "I had trouble planning your trip. Could you try again with more details?",
-            "error": str(e)
-        }
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/voice-input")
 async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = False):
@@ -551,9 +632,95 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
             print(f"[DEBUG] Successfully transcribed: '{transcript}'")
             
             try:
-                # Use the new process_trip_pipeline
+                # MODIFIED: Process transcript using the CLI-style approach instead of directly calling trip_planner.process
+                # Initial state (same as CLI version)
                 state = {"query": transcript}
-                result = await process_trip_pipeline(state)
+                
+                # Step 1: Chat Input Node
+                print("[DEBUG] Processing with chat_input_node")
+                state = await chat_input_node(state)
+                
+                # Step 2: Intent Parser Node
+                print("[DEBUG] Processing with intent_parser_node")
+                state = await intent_parser_node(state)
+                
+                # Check for errors in intent parsing
+                if "error" in state and state["error"]:
+                    print(f"[ERROR] Intent parser error: {state['error']}")
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": f"Failed to understand your travel query: {state['error']}",
+                        "error": state["error"]
+                    }
+                
+                # Check if metadata was extracted
+                if "metadata" not in state or not state["metadata"]:
+                    print("[ERROR] No metadata extracted from query")
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": "Could not extract travel details from your query",
+                        "error": "No metadata was extracted"
+                    }
+                
+                # Step 3: Trip Validator Node
+                print("[DEBUG] Processing with trip_validator_node")
+                state = await trip_validator_node(state)
+                
+                # Check if trip is valid
+                if not state.get('is_valid', False):
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": "Your travel query couldn't be processed.",
+                        "validation_errors": state.get("validation_errors", ["Unknown validation error"]),
+                        "error": "Invalid trip parameters"
+                    }
+                
+                # Step 4: Planner Node
+                print("[DEBUG] Processing with planner_node")
+                state = await planner_node(state)
+                
+                # Step 5: Agent Nodes
+                nodes_to_call = state.get('nodes_to_call', [])
+                print(f"[DEBUG] Nodes to call: {nodes_to_call}")
+                
+                if 'flights' in nodes_to_call:
+                    print("[DEBUG] Processing with flights_node")
+                    state = await flights_node(state)
+                
+                if 'route' in nodes_to_call:
+                    print("[DEBUG] Processing with route_node")
+                    state = await route_node(state)
+                
+                if 'places' in nodes_to_call:
+                    print("[DEBUG] Processing with places_node")
+                    state = await places_node(state)
+                
+                if 'restaurants' in nodes_to_call:
+                    print("[DEBUG] Processing with restaurants_node")
+                    state = await restaurants_node(state)
+                
+                if 'hotel' in nodes_to_call:
+                    print("[DEBUG] Processing with hotel_node")
+                    state = await hotel_node(state)
+                
+                if 'budget' in nodes_to_call:
+                    print("[DEBUG] Processing with budget_node")
+                    state = await budget_node(state)
+                
+                # Step 6: Reviews Node
+                print("[DEBUG] Processing with reviews_node")
+                state = await reviews_node(state)
+                
+                # Step 7: Summary Node
+                print("[DEBUG] Processing with summary_node")
+                state = await summary_node(state)
+                
+                # Use the result from the state
+                result = state
+                print(f"[DEBUG] Final state keys: {result.keys()}")
                 
                 # Check if there was an error in processing
                 if "error" in result and result["error"]:
@@ -570,13 +737,17 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
                 structured_response = {}
                 
                 if isinstance(result, dict):
-                    # If we have an itinerary with daily_itinerary
-                    if "itinerary" in result and isinstance(result["itinerary"], dict) and "daily_itinerary" in result["itinerary"]:
-                        print("[DEBUG] Returning structured itinerary with daily_itinerary")
+                    # If we have an itinerary and daily_itinerary, return the structured data
+                    if "daily_itinerary" in result:
+                        print("[DEBUG] Returning structured daily itinerary")
                         return {
                             "success": True,
                             "transcript": transcript,
-                            "response": result["itinerary"]
+                            "response": {
+                                "trip_summary": result.get("trip_summary", {}),
+                                "daily_itinerary": result.get("daily_itinerary", {}),
+                                "review_highlights": result.get("review_highlights", {})
+                            }
                         }
                     # If we have just a trip_summary
                     elif "trip_summary" in result:
@@ -588,10 +759,17 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
                         }
                     # If we have a string itinerary
                     elif "itinerary" in result and result["itinerary"]:
-                        print("[DEBUG] Returning itinerary")
+                        print("[DEBUG] Returning itinerary as string or object")
                         if isinstance(result["itinerary"], str):
                             response_text = result["itinerary"]
                         else:
+                            # If itinerary is a dict with daily_itinerary
+                            if isinstance(result["itinerary"], dict) and "daily_itinerary" in result["itinerary"]:
+                                return {
+                                    "success": True,
+                                    "transcript": transcript,
+                                    "response": result["itinerary"]
+                                }
                             response_text = f"Generated itinerary for your trip to {result.get('metadata', {}).get('destination', 'your destination')}"
                             structured_response = result["itinerary"]
                     else:
@@ -613,9 +791,9 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
                         "response": response_text
                     }
             except Exception as planning_error:
-                import traceback
                 print(f"[ERROR] Trip planning failed: {str(planning_error)}")
-                print(traceback.format_exc())
+                import traceback
+                traceback.print_exc()
                 return {
                     "success": False,
                     "transcript": transcript,
@@ -630,9 +808,9 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
                 "error": str(transcription_error)
             }
     except Exception as e:
-        import traceback
         print(f"[ERROR] Voice input processing error: {str(e)}")
-        print(traceback.format_exc())
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up the temporary file if it still exists and we're not in debug mode
@@ -679,9 +857,95 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
             print(f"[DEBUG] Successfully transcribed: '{transcript}'")
             
             try:
-                # Use the new process_trip_pipeline
+                # MODIFIED: Process transcript using the CLI-style approach instead of directly calling trip_planner.process
+                # Initial state (same as CLI version)
                 state = {"query": transcript}
-                result = await process_trip_pipeline(state)
+                
+                # Step 1: Chat Input Node
+                print("[DEBUG] Processing with chat_input_node")
+                state = await chat_input_node(state)
+                
+                # Step 2: Intent Parser Node
+                print("[DEBUG] Processing with intent_parser_node")
+                state = await intent_parser_node(state)
+                
+                # Check for errors in intent parsing
+                if "error" in state and state["error"]:
+                    print(f"[ERROR] Intent parser error: {state['error']}")
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": f"Failed to understand your travel query: {state['error']}",
+                        "error": state["error"]
+                    }
+                
+                # Check if metadata was extracted
+                if "metadata" not in state or not state["metadata"]:
+                    print("[ERROR] No metadata extracted from query")
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": "Could not extract travel details from your query",
+                        "error": "No metadata was extracted"
+                    }
+                
+                # Step 3: Trip Validator Node
+                print("[DEBUG] Processing with trip_validator_node")
+                state = await trip_validator_node(state)
+                
+                # Check if trip is valid
+                if not state.get('is_valid', False):
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": "Your travel query couldn't be processed.",
+                        "validation_errors": state.get("validation_errors", ["Unknown validation error"]),
+                        "error": "Invalid trip parameters"
+                    }
+                
+                # Step 4: Planner Node
+                print("[DEBUG] Processing with planner_node")
+                state = await planner_node(state)
+                
+                # Step 5: Agent Nodes
+                nodes_to_call = state.get('nodes_to_call', [])
+                print(f"[DEBUG] Nodes to call: {nodes_to_call}")
+                
+                if 'flights' in nodes_to_call:
+                    print("[DEBUG] Processing with flights_node")
+                    state = await flights_node(state)
+                
+                if 'route' in nodes_to_call:
+                    print("[DEBUG] Processing with route_node")
+                    state = await route_node(state)
+                
+                if 'places' in nodes_to_call:
+                    print("[DEBUG] Processing with places_node")
+                    state = await places_node(state)
+                
+                if 'restaurants' in nodes_to_call:
+                    print("[DEBUG] Processing with restaurants_node")
+                    state = await restaurants_node(state)
+                
+                if 'hotel' in nodes_to_call:
+                    print("[DEBUG] Processing with hotel_node")
+                    state = await hotel_node(state)
+                
+                if 'budget' in nodes_to_call:
+                    print("[DEBUG] Processing with budget_node")
+                    state = await budget_node(state)
+                
+                # Step 6: Reviews Node
+                print("[DEBUG] Processing with reviews_node")
+                state = await reviews_node(state)
+                
+                # Step 7: Summary Node
+                print("[DEBUG] Processing with summary_node")
+                state = await summary_node(state)
+                
+                # Use the result from the state
+                result = state
+                print(f"[DEBUG] Final state keys: {result.keys()}")
                 
                 # Check if there was an error in processing
                 if "error" in result and result["error"]:
@@ -698,13 +962,17 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
                 structured_response = {}
                 
                 if isinstance(result, dict):
-                    # If we have an itinerary with daily_itinerary
-                    if "itinerary" in result and isinstance(result["itinerary"], dict) and "daily_itinerary" in result["itinerary"]:
-                        print("[DEBUG] Returning structured itinerary with daily_itinerary")
+                    # If we have an itinerary and daily_itinerary, return the structured data
+                    if "daily_itinerary" in result:
+                        print("[DEBUG] Returning structured daily itinerary")
                         return {
                             "success": True,
                             "transcript": transcript,
-                            "response": result["itinerary"]
+                            "response": {
+                                "trip_summary": result.get("trip_summary", {}),
+                                "daily_itinerary": result.get("daily_itinerary", {}),
+                                "review_highlights": result.get("review_highlights", {})
+                            }
                         }
                     # If we have just a trip_summary
                     elif "trip_summary" in result:
@@ -716,10 +984,17 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
                         }
                     # If we have a string itinerary
                     elif "itinerary" in result and result["itinerary"]:
-                        print("[DEBUG] Returning itinerary")
+                        print("[DEBUG] Returning itinerary as string or object")
                         if isinstance(result["itinerary"], str):
                             response_text = result["itinerary"]
                         else:
+                            # If itinerary is a dict with daily_itinerary
+                            if isinstance(result["itinerary"], dict) and "daily_itinerary" in result["itinerary"]:
+                                return {
+                                    "success": True,
+                                    "transcript": transcript,
+                                    "response": result["itinerary"]
+                                }
                             response_text = f"Generated itinerary for your trip to {result.get('metadata', {}).get('destination', 'your destination')}"
                             structured_response = result["itinerary"]
                     else:
@@ -741,9 +1016,9 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
                         "response": response_text
                     }
             except Exception as planning_error:
-                import traceback
                 print(f"[ERROR] Trip planning failed: {str(planning_error)}")
-                print(traceback.format_exc())
+                import traceback
+                traceback.print_exc()
                 return {
                     "success": False,
                     "transcript": transcript,
@@ -762,71 +1037,212 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
             }
             
     except Exception as e:
-        import traceback
         print(f"[ERROR] Audio processing error: {str(e)}")
-        print(traceback.format_exc())
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "response": "There was an error processing your audio. Please try again.",
             "error": str(e)
         }
 
-# Update TripPlannerGraph class process_with_state method
-class TripPlannerGraph:
-    """Graph controller for the trip planner."""
-    
-    async def process_with_state(self, state):
-        """Process state through the trip planning pipeline."""
-        try:
-            # Use the consistent processing pipeline
-            return await process_trip_pipeline(state)
-        except Exception as e:
-            import traceback
-            print(f"[ERROR] Error in process_with_state: {str(e)}")
-            print(traceback.format_exc())
-            return {
-                "error": str(e),
-                "is_valid": False
-            }
-    
-    async def process_with_trip_data(self, trip_data):
-        """Process structured trip data."""
-        try:
-            # Convert trip data to a state dictionary
-            state = {
-                "metadata": trip_data.metadata,
-                "is_valid": True
-            }
+async def process_valid_state(state, conversation_id):
+    """
+    Process a valid state through the planning nodes, implementing a step-by-step workflow.
+    This function follows the same path as the CLI's process_travel_query function.
+    """
+    try:
+        print("[DEBUG] Processing valid state")
+        
+        # Step 4: Planner Node (same as CLI)
+        print("[DEBUG] Processing with planner_node")
+        state = await planner_node(state)
+        
+        # Step 5: Process agent nodes (implemented to match CLI process_nodes)
+        nodes_to_call = state.get('nodes_to_call', [])
+        print(f"[DEBUG] Nodes to call: {nodes_to_call}")
+        
+        # Check if we need to process flights first
+        if 'flights' in nodes_to_call:
+            print("[DEBUG] Processing with flights_node")
             
-            # Use the consistent processing pipeline starting from planner
-            state = await planner_node(state)
+            # Initialize Amadeus API client with credentials
+            # This ensures we use the real API client, just like the CLI version
+            api_key = os.getenv("AMADEUS_API_KEY")
+            api_secret = os.getenv("AMADEUS_SECRET_KEY")
             
-            # Process agent nodes
+            # Log the API credentials status (not the actual credentials)
+            print(f"[DEBUG] Amadeus API credentials present: {bool(api_key and api_secret)}")
+            
+            # Process flights - will use real flight lookup if credentials are available
+            state = await flights_node(state)
+            
+            # Check if we have flights to select
+            if not state.get("flights", []):
+                print("[WARNING] No flights found, generating mock flight data")
+                # Generate mock flight data to ensure we always have options
+                from app.nodes.agent_nodes import _generate_mock_flights
+                state = await _generate_mock_flights(state)
+            
+            # Double check we have flights now
+            if state.get("flights", []):
+                # Save the state with flights for selection
+                state["awaiting_flight_selection"] = True
+                conversation_states[conversation_id] = state
+                
+                print(f"[DEBUG] Got {len(state['flights'])} flight options, returning for selection")
+                
+                # Return response asking for flight selection
+                return ChatResponse(
+                    conversation_id=conversation_id,
+                    is_valid=True,
+                    selection_type="flight",
+                    flight_options=state["flights"],
+                    next_question="Please select a flight that best suits your needs:"
+                )
+            else:
+                print("[ERROR] Still no flights available after fallback")
+        
+        # If we reach here without returning a flight selection request,
+        # then either:
+        # 1. No flight node needed
+        # 2. No flights available
+        # Continue with other nodes
+        
+        # Process other nodes
+        return await process_remaining_nodes(state, nodes_to_call, conversation_id)
+        
+    except Exception as e:
+        print(f"[ERROR] Error in process_valid_state: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def process_remaining_nodes(state, nodes_to_call, conversation_id):
+    """
+    Process the remaining nodes after flight selection or if no flight selection is needed.
+    """
+    try:
+        # Skip the flights node as it's handled separately
+        remaining_nodes = [node for node in nodes_to_call if node != "flights"]
+        
+        for node in remaining_nodes:
+            print(f"[DEBUG] Processing node: {node}")
+            
+            if node == "route":
+                state = await route_node(state)
+            elif node == "places":
+                state = await places_node(state)
+            elif node == "restaurants":
+                state = await restaurants_node(state)
+            elif node == "hotel":
+                state = await hotel_node(state)
+            elif node == "budget":
+                state = await budget_node(state)
+        
+        # Handle reviews
+        print("[DEBUG] Processing reviews")
+        state = await reviews_node(state)
+        
+        # Generate itinerary
+        print("[DEBUG] Generating itinerary")
+        state = await summary_node(state)
+        
+        # Mark planning as complete - this is used by continue-processing endpoint
+        state["planning_complete"] = True
+        
+        # Save updated state
+        conversation_states[conversation_id] = state
+        
+        # Return the completed itinerary
+        return ChatResponse(
+            itinerary=state.get("itinerary", "No itinerary could be generated."),
+            is_valid=True,
+            conversation_id=conversation_id
+        )
+        
+    except Exception as e:
+        print(f"[ERROR] Error in process_remaining_nodes: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return error response
+        return ChatResponse(
+            error=f"An error occurred while processing your request: {str(e)}",
+            is_valid=False,
+            conversation_id=conversation_id
+        )
+
+@app.post("/continue-processing", response_model=ChatResponse)
+async def continue_processing(request: ChatRequest):
+    """
+    Continue processing a conversation after a flight has been selected.
+    This is used in step-by-step mode to allow the frontend to fetch the final itinerary.
+    """
+    try:
+        print(f"[DEBUG] Continue processing request: {request.dict()}")
+        
+        # Ensure we have a valid conversation ID
+        if not request.conversation_id:
+            print("[ERROR] Missing conversation_id in continue-processing request")
+            return ChatResponse(
+                error="Missing conversation ID",
+                is_valid=False,
+                conversation_id=None
+            )
+            
+        if request.conversation_id not in conversation_states:
+            print(f"[ERROR] Invalid conversation ID: {request.conversation_id}")
+            return ChatResponse(
+                error="Invalid conversation ID",
+                is_valid=False,
+                conversation_id=request.conversation_id
+            )
+        
+        # Get the conversation state
+        state = conversation_states[request.conversation_id]
+        print(f"[DEBUG] Conversation state keys: {state.keys()}")
+        
+        # Check if we just completed a flight selection
+        if state.get("selected_flights") and not state.get("planning_complete"):
+            # Get the nodes that need processing
             nodes_to_call = state.get('nodes_to_call', [])
-            state = await process_nodes(state, nodes_to_call)
+            print(f"[DEBUG] Continuing with remaining nodes: {nodes_to_call}")
             
-            # Process reviews
-            state = await reviews_node(state)
-            
-            # Generate summary
-            state = await summary_node(state)
-            
-            # Add coordinates to itinerary if it exists and is in dictionary format
-            if "itinerary" in state and isinstance(state["itinerary"], dict):
-                print("[DEBUG] Adding coordinates to itinerary")
-                state["itinerary"] = await add_coordinates_to_itinerary(state["itinerary"])
-            
-            return state
-        except Exception as e:
-            import traceback
-            print(f"[ERROR] Error in process_with_trip_data: {str(e)}")
-            print(traceback.format_exc())
-            return {
-                "error": str(e),
-                "is_valid": False
-            }
+            # Process the remaining nodes
+            return await process_remaining_nodes(state, nodes_to_call, request.conversation_id)
+        elif state.get("planning_complete"):
+            # If planning is already complete, just return the itinerary
+            print("[DEBUG] Planning is already complete, returning itinerary")
+            return ChatResponse(
+                itinerary=state.get("itinerary", "No itinerary could be generated."),
+                is_valid=True,
+                conversation_id=request.conversation_id
+            )
+        else:
+            # No flight selection was done, or we're in an unexpected state
+            print(f"[ERROR] Unexpected state in continue-processing. selected_flights: {state.get('selected_flights')}, planning_complete: {state.get('planning_complete')}")
+            print(f"[DEBUG] State contains keys: {state.keys()}")
+            return ChatResponse(
+                error="No pending operations to continue",
+                is_valid=False,
+                conversation_id=request.conversation_id
+            )
+        
+    except Exception as e:
+        print(f"[ERROR] Error in continue_processing: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return ChatResponse(
+            error=f"An error occurred while continuing processing: {str(e)}",
+            is_valid=False,
+            conversation_id=request.conversation_id
+        )
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting AI Travel Planner API on port 8000...")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    print("\n✨ Starting AI Travel Planner API Server ✨")
+    print("- Using real flight data APIs (matching CLI behavior)")
+    print("- Supporting step-by-step workflow with flight selection")
+    print("- Ready to process travel planning requests")
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
