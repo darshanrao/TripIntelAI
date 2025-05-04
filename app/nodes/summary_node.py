@@ -166,9 +166,18 @@ INSTRUCTIONS:
 2. Allocate activities (flights, hotel check-in/out, attractions, meals) to specific days and times
 3. Be realistic about timing - account for travel time between locations, meal duration, etc.
 4. Assign specific restaurants for meals based on their location and the day's activities
-5. Include the selected flight on the appropriate days - this is the flight the user has specifically chosen
-6. Include hotel check-in on the first day and check-out on the last day
+5. For flights scheduling:
+   - The arrival flight should be on the FIRST day of the trip - plan the first day's activities AFTER this arrival
+   - The departure flight should be on the LAST day of the trip - plan the last day's activities BEFORE this departure
+   - Use the exact flight times from the selected flights
+6. Include hotel check-in on the first day (after arrival) and check-out on the last day
 7. Incorporate review insights for places, restaurants, and hotels to highlight key strengths and precautions
+
+IMPORTANT FLIGHT HANDLING:
+- For the FIRST DAY: Schedule the arrival flight (destination = trip destination) at the beginning of the day, and plan activities AFTER arrival
+- For the LAST DAY: Schedule the departure flight (source = trip destination) before end of day, and plan activities BEFORE departure
+- If the itinerary starts with SFO (San Francisco) to LAX (Los Angeles), the first activity should be arriving at LAX
+- Plan activity timing based on flight arrival/departure times
 
 IMPORTANT: 
 - Keep your response concise and focused on essential information
