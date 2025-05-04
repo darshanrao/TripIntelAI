@@ -15,6 +15,9 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Import our pipeline functions
+from app.pipeline import process_travel_query, process_feedback, Spinner
+
 # Load environment variables from .env file (same as CLI version)
 load_dotenv()
 
@@ -104,7 +107,7 @@ async def chat_query(request: ChatRequest):
     """
     Process a natural language query through the travel planning pipeline.
     Provides an interactive experience by asking follow-up questions if needed,
-    and supporting a step-by-step workflow matching the CLI version.
+    and supporting a step-by-step workflow.
     
     Example:
     ```
@@ -141,7 +144,14 @@ async def chat_query(request: ChatRequest):
                 
                 # If validation is now complete, continue with the planning process
                 if state.get("is_valid"):
-                    return await process_valid_state(state, request.conversation_id)
+                    state = await process_travel_query(state["query"], interactive=True)
+                    return ChatResponse(
+                        itinerary=state.get("itinerary"),
+                        is_valid=state.get("is_valid", False),
+                        conversation_id=request.conversation_id,
+                        error=state.get("error"),
+                        validation_errors=state.get("validation_errors")
+                    )
             
             # Not in interactive mode but has a valid conversation - handle as a new query
             # Reset the state for a new query in the same conversation
@@ -152,20 +162,14 @@ async def chat_query(request: ChatRequest):
             state = {"query": request.query}
             request.conversation_id = conversation_id
         
-        # Begin processing the query
-        state = await chat_input_node(state)
-        state = await intent_parser_node(state)
+        # Process the query using our pipeline
+        state = await process_travel_query(request.query, interactive=True)
         
-        # Check if we need to validate with interactive mode
-        state["interactive_mode"] = True  # Enable interactive mode
-        state = await trip_validator_node(state)
+        # Save the state
+        conversation_states[request.conversation_id] = state
         
         # If we need more information, enter interactive mode
         if not state.get("is_valid", False) and state.get("interactive_mode") and state.get("next_question"):
-            # Save the state for future interactions
-            conversation_states[request.conversation_id] = state
-            
-            # Return the question for the missing field
             return ChatResponse(
                 conversation_id=request.conversation_id,
                 interactive_mode=True,
@@ -173,19 +177,18 @@ async def chat_query(request: ChatRequest):
                 is_valid=False
             )
         
-        # If validation succeeded, proceed with the step-by-step processing
-        if state.get("is_valid", False):
-            return await process_valid_state(state, request.conversation_id)
-        
-        # Handle validation errors (if not in interactive mode)
+        # Return the response
         return ChatResponse(
-            error="Invalid trip parameters",
-            is_valid=False,
-            validation_errors=state.get("validation_errors", ["Unknown validation error"]),
+            itinerary=state.get("itinerary"),
+            is_valid=state.get("is_valid", False),
             conversation_id=request.conversation_id,
-            suggestions=["Try specifying dates in MM/DD/YYYY format", 
-                        "Make sure to include your destination",
-                        "Specify the number of travelers"]
+            error=state.get("error"),
+            validation_errors=state.get("validation_errors"),
+            suggestions=state.get("suggestions", [
+                "Try specifying dates in MM/DD/YYYY format", 
+                "Make sure to include your destination",
+                "Specify the number of travelers"
+            ]) if not state.get("is_valid", False) else None
         )
         
     except Exception as e:
@@ -1242,6 +1245,17 @@ async def continue_processing(request: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     print("\n✨ Starting AI Travel Planner API Server ✨")
+    
+    # Check Amadeus API credentials
+    api_key = os.getenv("AMADEUS_API_KEY")
+    api_secret = os.getenv("AMADEUS_SECRET_KEY")
+    if not api_key or not api_secret:
+        print("\n⚠️  WARNING: Amadeus API credentials not found!")
+        print("- Set AMADEUS_API_KEY and AMADEUS_SECRET_KEY in your environment")
+        print("- Flight searches will use mock data until credentials are configured")
+    else:
+        print("- Amadeus API credentials found - using real flight data")
+    
     print("- Using real flight data APIs (matching CLI behavior)")
     print("- Supporting step-by-step workflow with flight selection")
     print("- Ready to process travel planning requests")

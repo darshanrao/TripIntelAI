@@ -1,8 +1,8 @@
 """
 Flight Booking API endpoint.
 
-This module provides an API endpoint for booking flights using the Stagehand
-flight booking service.
+This module provides an API endpoint for booking flights using visible
+browser automation to demonstrate the booking process.
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -13,10 +13,8 @@ import os
 import logging
 from datetime import datetime
 
-# Import our flight booking service
-# In a real implementation, using relative imports:
-# from ...services.stagehand_flight_booker import StagehnadFlightBooker
-# For testing, we'll use mock classes
+# Import our visible flight booker
+from services.stagehand_flight_booker import VisibleFlightBooker
 
 # Mock classes for testing without dependencies
 class MockFlightBooker:
@@ -71,15 +69,10 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# Create a background task to handle the booking process
+# Update the background task to use visible automation
 async def book_flight_task(booking_request: BookingRequest, booking_id: str):
     try:
-        # In a real implementation:
-        # from services.stagehand_flight_booker import StagehnadFlightBooker
-        # booker = StagehnadFlightBooker()
-        
-        # For now, use our mock
-        booker = MockFlightBooker()
+        booker = VisibleFlightBooker()
         
         try:
             await booker.initialize()
@@ -88,7 +81,7 @@ async def book_flight_task(booking_request: BookingRequest, booking_id: str):
             flight_info = booking_request.flight_info.dict()
             passenger_info = booking_request.passenger_info.dict()
             
-            # Book the flight
+            # Book the flight - this will show the browser automation
             result = await booker.book_flight(
                 flight_info=flight_info,
                 passenger_info=passenger_info,
@@ -96,8 +89,6 @@ async def book_flight_task(booking_request: BookingRequest, booking_id: str):
             )
             
             # Store the result for retrieval later
-            # In a real implementation, this would store to a database
-            # For now, we'll just log it
             logging.info(f"Booking result for {booking_id}: {result}")
             
         finally:
