@@ -183,10 +183,10 @@ class TripPlannerGraph:
         """
         graph = self.build()
         
-<<<<<<< Updated upstream
         # Initialize state with user query, ensuring no conflicting keys exist
         initial_state = {
             "query": query,
+            "raw_query": query,
             # Explicitly initialize empty values for agent node keys to avoid conflicts
             "flights": [],
             "route": {},
@@ -195,10 +195,6 @@ class TripPlannerGraph:
             "hotel": {},
             "budget": {}
         }
-=======
-        # Initialize state with both query and raw_query
-        initial_state = {"query": query, "raw_query": query}
->>>>>>> Stashed changes
         
         try:
             # Run the graph
