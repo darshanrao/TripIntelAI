@@ -176,13 +176,29 @@ class TripPlannerGraph:
         """
         graph = self.build()
         
-        # Initialize state with user query
-        initial_state = {"query": query}
+        # Initialize state with user query, ensuring no conflicting keys exist
+        initial_state = {
+            "query": query,
+            # Explicitly initialize empty values for agent node keys to avoid conflicts
+            "flights": [],
+            "route": {},
+            "places": [],
+            "restaurants": [],
+            "hotel": {},
+            "budget": {}
+        }
         
-        # Run the graph
-        final_state = await graph.ainvoke(initial_state)
-        
-        return final_state
+        try:
+            # Run the graph
+            final_state = await graph.ainvoke(initial_state)
+            return final_state
+        except Exception as e:
+            # Handle errors gracefully
+            print(f"[ERROR] Error processing query in trip planner graph: {e}")
+            return {
+                "error": str(e),
+                "response": "Sorry, I had trouble processing your travel request. Could you please try again with more details?"
+            }
     
     async def process_with_trip_data(self, trip_data: TripData) -> Dict[str, Any]:
         """
@@ -202,13 +218,21 @@ class TripPlannerGraph:
             "hotel": trip_data.hotel.dict() if trip_data.hotel else {},
             "places": [p.dict() for p in trip_data.places],
             "restaurants": [r.dict() for r in trip_data.restaurants],
-            "budget": trip_data.budget.dict() if trip_data.budget else {}
+            "budget": trip_data.budget.dict() if trip_data.budget else {},
+            "route": {}  # Initialize route key to avoid conflicts
         }
         
-        # Process directly through the summary node
-        result_state = await summary_node(initial_state)
-        
-        return result_state
+        try:
+            # Process directly through the summary node
+            result_state = await summary_node(initial_state)
+            return result_state
+        except Exception as e:
+            # Handle errors gracefully
+            print(f"[ERROR] Error processing trip data in summary node: {e}")
+            return {
+                "error": str(e),
+                "response": "Sorry, I had trouble processing your travel data. Please check your trip details and try again."
+            }
 
     async def process_with_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -222,7 +246,22 @@ class TripPlannerGraph:
         """
         graph = self.build()
         
-        # Run the graph with the existing state
-        final_state = await graph.ainvoke(state)
+        # Ensure the state has all necessary keys to avoid conflicts
+        for key in ["flights", "route", "places", "restaurants", "hotel", "budget"]:
+            if key not in state:
+                if key in ["route", "hotel", "budget"]:
+                    state[key] = {}
+                else:
+                    state[key] = []
         
-        return final_state 
+        try:
+            # Run the graph with the existing state
+            final_state = await graph.ainvoke(state)
+            return final_state
+        except Exception as e:
+            # Handle errors gracefully
+            print(f"[ERROR] Error processing state in trip planner graph: {e}")
+            return {
+                "error": str(e),
+                "response": "Sorry, I had trouble processing your travel request. Could you please try again with more details?"
+            } 

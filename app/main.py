@@ -13,14 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import time
 from pathlib import Path
-<<<<<<< Updated upstream
 
 # Import our consolidated validator
 from app.nodes.trip_validator_node import trip_validator_node, process_user_response
 from app.nodes.chat_input_node import chat_input_node
 from app.nodes.intent_parser_node import intent_parser_node
-=======
->>>>>>> Stashed changes
 
 app = FastAPI(title="AI Travel Planner")
 
@@ -37,10 +34,6 @@ trip_planner = TripPlannerGraph()
 
 # Dictionary to store conversation states
 conversation_states = {}
-
-# Create a dedicated audio directory
-AUDIO_DIR = Path("audio_files")
-AUDIO_DIR.mkdir(exist_ok=True)
 
 # Create a dedicated audio directory
 AUDIO_DIR = Path("audio_files")
@@ -321,61 +314,17 @@ async def search_travel_options(
 @app.post("/analyze-input")
 async def analyze_input(request: AnalyzeInputRequest):
     try:
-        result = await trip_planner.process(request.input)
-        
-        # Extract a simple text response from the complex result
-        if isinstance(result, dict):
-            if "itinerary" in result and result["itinerary"]:
-                # Check if itinerary is a string or an object
-                if isinstance(result["itinerary"], str):
-                    return {"response": result["itinerary"]}
-                else:
-                    # Just pass through the complex object - frontend will handle it
-                    return {"response": result["itinerary"]}
-            elif "trip_summary" in result:
-                # Return the structured data for the frontend to handle
-                if "daily_itinerary" in result:
-                    return {"response": {
-                        "trip_summary": result["trip_summary"],
-                        "daily_itinerary": result.get("daily_itinerary", {}),
-                        "review_highlights": result.get("review_highlights", {})
-                    }}
-                else:
-                    # Fallback to string summary
-                    summary = result["trip_summary"]
-                    return {"response": f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}. Duration: {summary.get('duration_days', 'several')} days."}
-            else:
-                return {"response": "Your trip has been planned successfully."}
-        else:
-            return {"response": "Thank you for your query. Your trip is being processed."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/voice-input")
-async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = False):
-    temp_path = None
-    try:
-        # Get information about the file
-        filename = file.filename
-        content_type = file.content_type
-        print(f"[DEBUG] Received file: {filename}, Content-Type: {content_type}")
-        
-        # Create temp file with the original extension to preserve format information
-        original_ext = os.path.splitext(filename)[1] or ".mp3"
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as temp:
-            shutil.copyfileobj(file.file, temp)
-            temp_path = temp.name
-        
-        print(f"[DEBUG] Saved uploaded file to {temp_path} (size: {os.path.getsize(temp_path)} bytes)")
-        
-        # Try transcribing the audio
         try:
-            transcript = transcribe_audio(temp_path, keep_files=keep_debug_files)
-            print(f"[DEBUG] Successfully transcribed: '{transcript}'")
+            result = await trip_planner.process(request.input)
             
-            # Process the transcript with the trip planner
-            result = await trip_planner.process(transcript)
+            # Check if there was an error in processing
+            if "error" in result and result["error"]:
+                print(f"[ERROR] Trip planner error: {result['error']}")
+                return {
+                    "success": False,
+                    "response": result.get("response", "I had trouble planning your trip based on that request."),
+                    "error": result["error"]
+                }
             
             # Extract a simple text response from the complex result
             if isinstance(result, dict):
@@ -402,6 +351,87 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
                     return {"response": "Your trip has been planned successfully."}
             else:
                 return {"response": "Thank you for your query. Your trip is being processed."}
+        except Exception as planning_error:
+            print(f"[ERROR] Trip planning failed: {str(planning_error)}")
+            return {
+                "success": False, 
+                "response": "I had trouble planning your trip. Could you try again with more details?",
+                "error": str(planning_error)
+            }
+    except Exception as e:
+        print(f"[ERROR] Request processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/voice-input")
+async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = False):
+    temp_path = None
+    try:
+        # Get information about the file
+        filename = file.filename
+        content_type = file.content_type
+        print(f"[DEBUG] Received file: {filename}, Content-Type: {content_type}")
+        
+        # Create temp file with the original extension to preserve format information
+        original_ext = os.path.splitext(filename)[1] or ".mp3"
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as temp:
+            shutil.copyfileobj(file.file, temp)
+            temp_path = temp.name
+        
+        print(f"[DEBUG] Saved uploaded file to {temp_path} (size: {os.path.getsize(temp_path)} bytes)")
+        
+        # Try transcribing the audio
+        try:
+            transcript = transcribe_audio(temp_path, keep_files=keep_debug_files)
+            print(f"[DEBUG] Successfully transcribed: '{transcript}'")
+            
+            try:
+                # Process the transcript with the trip planner
+                result = await trip_planner.process(transcript)
+                
+                # Check if there was an error in processing
+                if "error" in result and result["error"]:
+                    print(f"[ERROR] Trip planner error: {result['error']}")
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": result.get("response", "I had trouble planning your trip based on that request."),
+                        "error": result["error"]
+                    }
+                
+                # Extract a simple text response from the complex result
+                if isinstance(result, dict):
+                    if "itinerary" in result and result["itinerary"]:
+                        # Check if itinerary is a string or an object
+                        if isinstance(result["itinerary"], str):
+                            return {"response": result["itinerary"]}
+                        else:
+                            # Just pass through the complex object - frontend will handle it
+                            return {"response": result["itinerary"]}
+                    elif "trip_summary" in result:
+                        # Return the structured data for the frontend to handle
+                        if "daily_itinerary" in result:
+                            return {"response": {
+                                "trip_summary": result["trip_summary"],
+                                "daily_itinerary": result.get("daily_itinerary", {}),
+                                "review_highlights": result.get("review_highlights", {})
+                            }}
+                        else:
+                            # Fallback to string summary
+                            summary = result["trip_summary"]
+                            return {"response": f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}. Duration: {summary.get('duration_days', 'several')} days."}
+                    else:
+                        return {"response": "Your trip has been planned successfully."}
+                else:
+                    return {"response": "Thank you for your query. Your trip is being processed."}
+            except Exception as planning_error:
+                print(f"[ERROR] Trip planning failed: {str(planning_error)}")
+                return {
+                    "success": False,
+                    "transcript": transcript,
+                    "response": "I understood what you said, but had trouble planning your trip. Could you try again with more details?",
+                    "error": str(planning_error)
+                }
         except Exception as transcription_error:
             # Handle transcription errors more gracefully
             print(f"[ERROR] Transcription failed: {str(transcription_error)}")
@@ -413,18 +443,6 @@ async def voice_input(file: UploadFile = File(...), keep_debug_files: bool = Fal
         print(f"[ERROR] Voice input processing error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path)
-
-if __name__ == "__main__":
-    import uvicorn
-    print("Starting AI Travel Planner API on port 8000...")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True) 
-=======
-=======
->>>>>>> Stashed changes
         # Clean up the temporary file if it still exists and we're not in debug mode
         if temp_path and os.path.exists(temp_path) and not keep_debug_files:
             os.remove(temp_path)
@@ -468,32 +486,51 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
             transcript = transcribe_audio(str(audio_path), keep_files=keep_debug_files)
             print(f"[DEBUG] Successfully transcribed: '{transcript}'")
             
-            # Process the transcript with the trip planner
-            result = await trip_planner.process(transcript)
-            
-            # Extract a simple text response from the complex result
-            response_text = ""
-            if isinstance(result, dict):
-                if "itinerary" in result and result["itinerary"]:
-                    if isinstance(result["itinerary"], str):
-                        response_text = result["itinerary"]
-                    else:
-                        # Handle complex object response
-                        response_text = f"Generated itinerary with {len(result['itinerary'].get('daily_itinerary', {}))} days"
-                elif "trip_summary" in result:
-                    summary = result["trip_summary"]
-                    response_text = f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}"
-                else:
-                    response_text = "Your trip has been planned successfully."
-            else:
-                response_text = "Thank you for your query. Your trip is being processed."
+            try:
+                # Process the transcript with the trip planner
+                result = await trip_planner.process(transcript)
                 
-            # Success response
-            return {
-                "success": True,
-                "transcript": transcript,
-                "response": response_text
-            }
+                # Check if there was an error in processing
+                if "error" in result and result["error"]:
+                    print(f"[ERROR] Trip planner error: {result['error']}")
+                    return {
+                        "success": False,
+                        "transcript": transcript,
+                        "response": result.get("response", "I had trouble planning your trip based on that request."),
+                        "error": result["error"]
+                    }
+                
+                # Extract a simple text response from the complex result
+                response_text = ""
+                if isinstance(result, dict):
+                    if "itinerary" in result and result["itinerary"]:
+                        if isinstance(result["itinerary"], str):
+                            response_text = result["itinerary"]
+                        else:
+                            # Handle complex object response
+                            response_text = f"Generated itinerary with {len(result['itinerary'].get('daily_itinerary', {}))} days"
+                    elif "trip_summary" in result:
+                        summary = result["trip_summary"]
+                        response_text = f"Trip to {summary.get('destination', 'your destination')} planned for {summary.get('start_date', 'your dates')}"
+                    else:
+                        response_text = "Your trip has been planned successfully."
+                else:
+                    response_text = "Thank you for your query. Your trip is being processed."
+                    
+                # Success response
+                return {
+                    "success": True,
+                    "transcript": transcript,
+                    "response": response_text
+                }
+            except Exception as planning_error:
+                print(f"[ERROR] Trip planning failed: {str(planning_error)}")
+                return {
+                    "success": False,
+                    "transcript": transcript,
+                    "response": "I understood what you said, but had trouble planning your trip. Could you try again with more details?",
+                    "error": str(planning_error)
+                }
                 
         except Exception as transcription_error:
             print(f"[ERROR] Transcription failed: {str(transcription_error)}")
@@ -511,9 +548,9 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
             "success": False,
             "response": "There was an error processing your audio. Please try again.",
             "error": str(e)
-<<<<<<< Updated upstream
-        } 
->>>>>>> Stashed changes
-=======
-        } 
->>>>>>> Stashed changes
+        }
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting AI Travel Planner API on port 8000...")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

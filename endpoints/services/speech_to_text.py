@@ -259,4 +259,4 @@ def transcribe_audio(file_path, keep_files=False):
             print(f"[ERROR] Deepgram API error content: {response.content}")
         print(f"[ERROR] Exception during transcription: {e}")
         # Don't clean up files on error for debugging purposes
-        raise 
+        raise e 
