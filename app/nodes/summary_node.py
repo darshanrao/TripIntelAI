@@ -131,6 +131,7 @@ IMPORTANT: Your output MUST be a valid JSON object. Do not include any explanati
 def merge_review_insights(itinerary: Dict[str, Any], state: GraphState) -> Dict[str, Any]:
     """
     Merge review insights from the state into the itinerary.
+    Only includes reviews for places that are actually in the itinerary.
     
     Args:
         itinerary: The generated itinerary
@@ -146,6 +147,10 @@ def merge_review_insights(itinerary: Dict[str, Any], state: GraphState) -> Dict[
     places = state.get("places", [])
     restaurants = state.get("restaurants", [])
     hotel = state.get("hotel", {})
+    
+    # Track which places and restaurants are actually in the itinerary
+    itinerary_places = set()
+    itinerary_restaurants = set()
     
     # Add review insights to each activity in the itinerary
     if "daily_itinerary" in itinerary:
@@ -163,12 +168,14 @@ def merge_review_insights(itinerary: Dict[str, Any], state: GraphState) -> Dict[
                         place = next((p for p in places if p.get("name") == activity_name), None)
                         if place and place.get("review_insights"):
                             activity["review_insights"] = place["review_insights"]
+                            itinerary_places.add(activity_name)
                     
                     # Add review insights for restaurants
                     elif activity["type"] == "dining":
                         restaurant = next((r for r in restaurants if r.get("name") == activity_name), None)
                         if restaurant and restaurant.get("review_insights"):
                             activity["review_insights"] = restaurant["review_insights"]
+                            itinerary_restaurants.add(activity_name)
                     
                     # Add review insights for hotel
                     elif activity["type"] == "accommodation" and hotel.get("review_insights"):
@@ -177,10 +184,10 @@ def merge_review_insights(itinerary: Dict[str, Any], state: GraphState) -> Dict[
     # Add review highlights section
     itinerary["review_highlights"] = {}
     
-    # Add top rated places
+    # Add top rated places (only those in the itinerary)
     if places:
         top_places = sorted(
-            [p for p in places if p.get("review_insights")],
+            [p for p in places if p.get("review_insights") and p.get("name") in itinerary_places],
             key=lambda x: x.get("rating", 0),
             reverse=True
         )[:3]
@@ -188,17 +195,17 @@ def merge_review_insights(itinerary: Dict[str, Any], state: GraphState) -> Dict[
             {
                 "name": p.get("name", ""),
                 "rating": p.get("rating", 0),
-                "key_strengths": p.get("review_insights", {}).get("strengths", []),
-                "key_weaknesses": p.get("review_insights", {}).get("weaknesses", []),
-                "summary": p.get("review_insights", {}).get("summary", "")
+                "strengths": p.get("review_insights", {}).get("analysis", {}).get("strengths", []),
+                "weaknesses": p.get("review_insights", {}).get("analysis", {}).get("weaknesses", []),
+                "summary": p.get("review_insights", {}).get("analysis", {}).get("summary", "")
             }
             for p in top_places
         ]
     
-    # Add top rated restaurants
+    # Add top rated restaurants (only those in the itinerary)
     if restaurants:
         top_restaurants = sorted(
-            [r for r in restaurants if r.get("review_insights")],
+            [r for r in restaurants if r.get("review_insights") and r.get("name") in itinerary_restaurants],
             key=lambda x: x.get("rating", 0),
             reverse=True
         )[:3]
@@ -206,22 +213,35 @@ def merge_review_insights(itinerary: Dict[str, Any], state: GraphState) -> Dict[
             {
                 "name": r.get("name", ""),
                 "rating": r.get("rating", 0),
-                "key_strengths": r.get("review_insights", {}).get("strengths", []),
-                "key_weaknesses": r.get("review_insights", {}).get("weaknesses", []),
-                "summary": r.get("review_insights", {}).get("summary", "")
+                "strengths": r.get("review_insights", {}).get("analysis", {}).get("strengths", []),
+                "weaknesses": r.get("review_insights", {}).get("analysis", {}).get("weaknesses", []),
+                "summary": r.get("review_insights", {}).get("analysis", {}).get("summary", "")
             }
             for r in top_restaurants
         ]
     
-    # Add hotel review summary
+    # Add hotel review summary (only if hotel is in the itinerary)
     if hotel and hotel.get("review_insights"):
-        itinerary["review_highlights"]["hotel_review_summary"] = {
-            "name": hotel.get("name", ""),
-            "rating": hotel.get("rating", 0),
-            "key_strengths": hotel.get("review_insights", {}).get("strengths", []),
-            "key_weaknesses": hotel.get("review_insights", {}).get("weaknesses", []),
-            "summary": hotel.get("review_insights", {}).get("summary", "")
-        }
+        # Check if hotel is in the itinerary
+        hotel_in_itinerary = False
+        if "daily_itinerary" in itinerary:
+            for day_data in itinerary["daily_itinerary"].values():
+                if "activities" in day_data:
+                    for activity in day_data["activities"]:
+                        if activity.get("type") == "accommodation":
+                            hotel_in_itinerary = True
+                            break
+                if hotel_in_itinerary:
+                    break
+        
+        if hotel_in_itinerary:
+            itinerary["review_highlights"]["hotel_review_summary"] = {
+                "name": hotel.get("name", ""),
+                "rating": hotel.get("rating", 0),
+                "strengths": hotel.get("review_insights", {}).get("analysis", {}).get("strengths", []),
+                "weaknesses": hotel.get("review_insights", {}).get("analysis", {}).get("weaknesses", []),
+                "summary": hotel.get("review_insights", {}).get("analysis", {}).get("summary", "")
+            }
     
     return itinerary
 
