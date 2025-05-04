@@ -1371,7 +1371,7 @@ async def get_review_insights(place_id: str, place_name: str) -> Optional[Dict[s
         search_prompt = f"""Please search the web for reviews and information about {place_name}. 
         Look for reviews from multiple sources (Google Maps, Yelp, TripAdvisor, etc.) and analyze them.
 
-        IMPORTANT: You must respond with a valid JSON object in the following format. Use double quotes for keys and values.Do not include any additional text or explanation outside the JSON structure.
+        IMPORTANT: You must respond ONLY with a valid JSON object in the following format. Use double quotes for keys and values. Do not include any additional text or explanation outside the JSON structure.
 
         {{
             "sentiment": "positive/negative/neutral",

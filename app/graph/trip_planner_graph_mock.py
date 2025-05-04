@@ -11,7 +11,7 @@ from app.nodes.trip_validator_node import trip_validator_node
 from app.nodes.planner_node import planner_node
 from app.nodes.agent_nodes import (
     flights_node, route_node, places_node, restaurants_node, 
-    hotel_node, budget_node
+    hotel_node, budget_node, reviews_node
 )
 from app.nodes.summary_node import summary_node
 import logging
@@ -140,6 +140,18 @@ async def process_trip_sequentially(query: str) -> Dict[str, Any]:
         }
         budget_state = await budget_node(budget_input)
         final_state["budget"] = budget_state.get("budget", {})
+        
+        # Reviews node
+        logger.info("Step 5f: Reviews Node")
+        reviews_input = {
+            "places": final_state.get("places", []),
+            "restaurants": final_state.get("restaurants", []),
+            "hotel": final_state.get("hotel", {})
+        }
+        reviews_state = await reviews_node(reviews_input)
+        final_state["places"] = reviews_state.get("places", [])
+        final_state["restaurants"] = reviews_state.get("restaurants", [])
+        final_state["hotel"] = reviews_state.get("hotel", {})
         
         # Step 6: Summary
         logger.info("Step 6: Summary Node")
