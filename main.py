@@ -3,13 +3,20 @@ import os
 import time
 import threading
 from dotenv import load_dotenv
-from app.graph.trip_planner_graph import TripPlannerGraph
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Import the individual components
+from app.nodes.chat_input_node import chat_input_node
+from app.nodes.intent_parser_node import intent_parser_node
+from app.nodes.trip_validator_node import trip_validator_node
+from app.nodes.planner_node import planner_node
+from app.nodes.agent_nodes import flights_node, places_node, restaurants_node, hotel_node, budget_node, reviews_node
+from app.nodes.summary_node import summary_node
 
 # Load environment variables
 load_dotenv()
@@ -42,54 +49,101 @@ class Spinner:
         print("\r", end="", flush=True)
 
 async def process_travel_query(query, spinner):
-    """Process a travel query using the trip planner pipeline"""
-    # Initialize the trip planner graph
-    trip_planner = TripPlannerGraph()
+    """Process a travel query using the individual components"""
+    # Initial state
+    state = {"query": query}
     
-    # Update spinner messages based on graph progress
+    # Step 1: Chat Input Node
     spinner.message = "Parsing your travel query"
+    logger.info("Step 1: Processing with chat_input_node")
+    state = await chat_input_node(state)
     
-    # Process the query - Only initialize the raw_query which is needed by the intent parser
-    # Using process() instead of process_with_state() to avoid key conflicts
-    try:
-        # Process through the graph with minimal state
-        result = await trip_planner.process(query)
-        logger.info("Query processed successfully through TripPlannerGraph")
-        return result
-    except Exception as e:
-        logger.error(f"Error processing through TripPlannerGraph: {str(e)}")
+    # Step 2: Intent Parser Node (using real implementation)
+    spinner.message = "Extracting travel details"
+    logger.info("Step 2: Processing with intent_parser_node")
+    state = await intent_parser_node(state)
+    
+    # Check for errors in intent parsing
+    if "error" in state and state["error"]:
+        logger.error(f"Intent parser error: {state['error']}")
         return {
             "is_valid": False,
-            "validation_errors": [f"Failed to process query: {str(e)}"],
-            "error": str(e)
+            "validation_errors": [f"Failed to understand your travel query: {state['error']}"],
+            "error": state["error"]
         }
-
-def display_random_travel_facts(spinner):
-    """Display random travel facts while loading"""
-    travel_facts = [
-        "The world's shortest commercial flight is between Westray and Papa Westray in Scotland's Orkney Islands, lasting just under 2 minutes.",
-        "France is the most visited country in the world, with over 89 million annual tourists.",
-        "The Great Wall of China is not visible from space with the naked eye, contrary to popular belief.",
-        "There are 195 recognized countries in the world today.",
-        "Japan has more than 1,500 earthquakes every year.",
-        "The passport color of most countries is either red, blue, green, or black.",
-        "San Marino is the world's oldest republic, founded in 301 CE.",
-        "The International Date Line isn't straight - it zigzags to avoid splitting countries into different days.",
-        "Vatican City is the smallest country in the world, with an area of just 0.17 square miles.",
-        "The word 'travel' comes from the French word 'travail', which means 'work'.",
-        "The average airplane meal loses 30% of its taste at high altitude due to cabin pressure.",
-        "Australia is the only continent without an active volcano.",
-        "Singapore's Changi Airport has a butterfly garden with over 1,000 butterflies.",
-        "The Dead Sea is so salty that people can easily float on top of it.",
-        "More than half of the world's population has never made or received a telephone call."
-    ]
     
-    import random
-    random.shuffle(travel_facts)
+    # Check if metadata was extracted
+    if "metadata" not in state or not state["metadata"]:
+        logger.error("No metadata extracted from query")
+        return {
+            "is_valid": False,
+            "validation_errors": ["Could not extract travel details from your query"],
+            "error": "No metadata was extracted"
+        }
     
-    for fact in travel_facts:
-        spinner.message = f"Did you know? {fact}"
-        time.sleep(4)  # Show each fact for 4 seconds
+    # Log the metadata
+    logger.info(f"Extracted metadata: {state.get('metadata')}")
+    
+    # Step 3: Trip Validator Node
+    spinner.message = "Validating your travel plans"
+    logger.info("Step 3: Processing with trip_validator_node")
+    state = await trip_validator_node(state)
+    
+    # Check if trip is valid
+    if not state.get('is_valid', False):
+        logger.warning(f"Validation failed: {state.get('validation_errors', [])}")
+        return state
+    
+    # Log validation warnings if any
+    if "validation_warnings" in state and state["validation_warnings"]:
+        logger.info(f"Validation warnings: {state['validation_warnings']}")
+    
+    # Step 4: Planner Node
+    spinner.message = "Planning your trip components"
+    logger.info("Step 4: Processing with planner_node")
+    state = await planner_node(state)
+    
+    # Step 5: Agent Nodes
+    nodes_to_call = state.get('nodes_to_call', [])
+    logger.info(f"Nodes to call: {nodes_to_call}")
+    
+    if 'flights' in nodes_to_call:
+        spinner.message = "Searching for flights"
+        logger.info("Step 5a: Processing with flights_node")
+        state = await flights_node(state)
+    
+    if 'places' in nodes_to_call:
+        spinner.message = "Finding interesting places to visit"
+        logger.info("Step 5b: Processing with places_node")
+        state = await places_node(state)
+    
+    if 'restaurants' in nodes_to_call:
+        spinner.message = "Discovering local restaurants"
+        logger.info("Step 5c: Processing with restaurants_node")
+        state = await restaurants_node(state)
+    
+    if 'hotel' in nodes_to_call:
+        spinner.message = "Locating suitable accommodations"
+        logger.info("Step 5d: Processing with hotel_node")
+        state = await hotel_node(state)
+    
+    if 'budget' in nodes_to_call:
+        spinner.message = "Calculating trip budget"
+        logger.info("Step 5e: Processing with budget_node")
+        state = await budget_node(state)
+    
+    # Step 6: Reviews Node
+    spinner.message = "Analyzing reviews for better recommendations"
+    logger.info("Step 6: Processing with reviews_node")
+    state = await reviews_node(state)
+    
+    # Step 7: Summary Node
+    spinner.message = "Generating your personalized itinerary"
+    logger.info("Step 7: Processing with summary_node")
+    state = await summary_node(state)
+    
+    logger.info("Processing completed successfully")
+    return state
 
 async def main():
     print("=" * 80)
@@ -116,13 +170,8 @@ async def main():
         spinner = Spinner("Processing your travel request")
         spinner.start()
         
-        # Start facts thread instead of messages
-        facts_thread = threading.Thread(target=display_random_travel_facts, args=(spinner,))
-        facts_thread.daemon = True
-        facts_thread.start()
-        
         try:
-            # Process the query with spinner for feedback
+            # Process the query
             result = await process_travel_query(query, spinner)
             
             # Stop spinner
