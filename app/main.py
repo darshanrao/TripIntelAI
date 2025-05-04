@@ -1,8 +1,13 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from app.graph.trip_planner_graph import TripPlannerGraph
 from app.schemas.trip_schema import TripData
 from typing import Optional, List, Dict, Any
+import tempfile
+import os
+import shutil
+from endpoints.services.llm_service import parse_user_input
+from endpoints.services.speech_to_text import transcribe_audio
 
 app = FastAPI(title="AI Travel Planner")
 
@@ -38,6 +43,9 @@ class SavedTrip(BaseModel):
     created_at: str
     updated_at: Optional[str] = None
     name: Optional[str] = None
+
+class AnalyzeInputRequest(BaseModel):
+    input: str
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_query(request: ChatRequest):
@@ -189,4 +197,28 @@ async def search_travel_options(
             "activities": []
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze-input")
+async def analyze_input(request: AnalyzeInputRequest):
+    try:
+        llm_response = parse_user_input(request.input)
+        return {"response": llm_response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/voice-input")
+async def voice_input(file: UploadFile = File(...)):
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp:
+            shutil.copyfileobj(file.file, temp)
+            temp_path = temp.name
+        transcript = transcribe_audio(temp_path)
+        llm_response = parse_user_input(transcript)
+        return {"response": llm_response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path) 
