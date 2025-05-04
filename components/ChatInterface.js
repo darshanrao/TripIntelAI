@@ -301,7 +301,7 @@ const ChatInterface = ({ onSendMessage }) => {
       let responseText = "";
       if (response.response) {
         if (typeof response.response === 'string') {
-          responseText = response.response;
+          responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
         } else {
           // It's an object, convert to readable text
           try {

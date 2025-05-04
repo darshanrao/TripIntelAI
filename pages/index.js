@@ -13,39 +13,11 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('chat');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Default sample itinerary for development/demo
-  const sampleItinerary = {
-    days: [
-      {
-        day: 1,
-        activities: [
-          { time: '09:00 AM', title: 'Empire State Building', description: 'Visit the iconic skyscraper', icon: '🏙️', location: { lat: 40.7484, lng: -73.9857 } },
-          { time: '12:30 PM', title: 'Lunch at Chelsea Market', description: 'Explore diverse food options', icon: '🍽️', location: { lat: 40.7420, lng: -74.0048 } },
-          { time: '02:30 PM', title: 'High Line Walk', description: 'Stroll along the elevated park', icon: '🚶', location: { lat: 40.7480, lng: -74.0048 } },
-          { time: '05:00 PM', title: 'Museum of Modern Art', description: 'Explore contemporary art', icon: '🏛️', location: { lat: 40.7614, lng: -73.9776 } },
-          { time: '08:00 PM', title: 'Dinner at Little Italy', description: 'Authentic Italian cuisine', icon: '🍝', location: { lat: 40.7197, lng: -73.9970 } },
-        ]
-      },
-      {
-        day: 2,
-        activities: [
-          { time: '10:00 AM', title: 'Central Park Bike Tour', description: 'Cycle through the scenic park', icon: '🚲', location: { lat: 40.7812, lng: -73.9665 } },
-          { time: '01:00 PM', title: 'Metropolitan Museum', description: 'World-class art collection', icon: '🖼️', location: { lat: 40.7794, lng: -73.9632 } },
-          { time: '04:00 PM', title: 'Times Square', description: 'Experience the bright lights', icon: '✨', location: { lat: 40.7580, lng: -73.9855 } },
-          { time: '07:30 PM', title: 'Broadway Show', description: 'Evening entertainment', icon: '🎭', location: { lat: 40.7590, lng: -73.9845 } },
-        ]
-      }
-    ]
-  };
-
   useEffect(() => {
     // Check if the screen is mobile
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
-    // Set initial itinerary data
-    setItineraryData(sampleItinerary);
     
     // Add window resize listener
     checkIfMobile();
@@ -53,92 +25,6 @@ export default function Home() {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
-  // Function to parse itinerary text from AI response
-  const parseItineraryFromText = (text) => {
-    try {
-      // Check if the text contains JSON
-      if (text.includes('{') && text.includes('}')) {
-        // Try to extract JSON from text
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const jsonData = JSON.parse(jsonMatch[0]);
-          return jsonData;
-        }
-      }
-      
-      // If no JSON found, try to parse the text format
-      // This is a simple example - in a real app, use more sophisticated parsing
-      const days = [];
-      const dayMatches = text.match(/Day \d+:[\s\S]*?(?=Day \d+:|$)/g);
-      
-      if (dayMatches) {
-        dayMatches.forEach((dayText, index) => {
-          const dayNumber = index + 1;
-          const activities = [];
-          
-          // Extract activities with time, title, and description
-          const activityMatches = dayText.match(/(\d{1,2}:\d{2} [AP]M)[\s-]*([^:]+)(?:: (.+))?/g);
-          
-          if (activityMatches) {
-            activityMatches.forEach((activityText, actIndex) => {
-              const timeMatch = activityText.match(/(\d{1,2}:\d{2} [AP]M)/);
-              const time = timeMatch ? timeMatch[1] : '';
-              
-              // Remove time from text
-              let remainingText = activityText.replace(time, '').trim();
-              remainingText = remainingText.replace(/^[-:]\s*/, '');
-              
-              // Split into title and description if possible
-              let title = remainingText;
-              let description = '';
-              
-              if (remainingText.includes(':')) {
-                const parts = remainingText.split(':');
-                title = parts[0].trim();
-                description = parts[1].trim();
-              }
-              
-              // Assign an appropriate icon based on keywords
-              let icon = '📍';
-              if (/breakfast|lunch|dinner|cafe|restaurant|food|eat/i.test(title)) {
-                icon = '🍽️';
-              } else if (/museum|gallery|art|exhibit/i.test(title)) {
-                icon = '🏛️';
-              } else if (/park|garden|nature|walk|hike/i.test(title)) {
-                icon = '🌳';
-              } else if (/hotel|accommodation|stay|check|inn/i.test(title)) {
-                icon = '🏨';
-              } else if (/tour|visit|explore/i.test(title)) {
-                icon = '🔍';
-              } else if (/show|theater|concert|music|performance/i.test(title)) {
-                icon = '🎭';
-              } else if (/beach|ocean|sea|swim/i.test(title)) {
-                icon = '🏖️';
-              }
-              
-              // Create mock location (in a real app, use geocoding API)
-              // For demo purposes, creating locations around central NYC with slight variations
-              const location = {
-                lat: 40.7580 + (Math.random() * 0.1 - 0.05),
-                lng: -73.9855 + (Math.random() * 0.1 - 0.05)
-              };
-              
-              activities.push({ time, title, description, icon, location });
-            });
-          }
-          
-          days.push({ day: dayNumber, activities });
-        });
-      }
-      
-      return { days };
-    } catch (error) {
-      console.error('Error parsing itinerary:', error);
-      return null;
-    }
-  };
-
-  // Handle message from chat
   const handleChatMessage = async (message) => {
     console.log('Message from chat:', message);
     
@@ -150,91 +36,80 @@ export default function Home() {
       console.log('API response:', response);
       
       // Parse the itinerary from API response
-      let responseText = '';
-      let parsedItinerary = null;
-      
       if (response.response) {
         if (typeof response.response === 'string') {
-          responseText = response.response;
-          parsedItinerary = parseItineraryFromText(responseText);
-        } else {
-          // Handle complex object response
           try {
-            if (response.response.daily_itinerary) {
-              // Convert the complex itinerary format to our app's format
-              const days = [];
-              const dailyItinerary = response.response.daily_itinerary;
-              
-              Object.keys(dailyItinerary).forEach((dayNum, dayIndex) => {
-                const dayActivities = dailyItinerary[dayNum];
-                const activities = dayActivities.map((activity, actIndex) => {
-                  // Determine icon based on activity text
-                  let icon = '📍';
-                  const activityText = activity.activity.toLowerCase();
-                  if (/breakfast|lunch|dinner|cafe|restaurant|food|eat/i.test(activityText)) {
-                    icon = '🍽️';
-                  } else if (/museum|gallery|art|exhibit/i.test(activityText)) {
-                    icon = '🏛️';
-                  } else if (/park|garden|nature|walk|hike/i.test(activityText)) {
-                    icon = '🌳';
-                  } else if (/hotel|accommodation|stay|check|inn/i.test(activityText)) {
-                    icon = '🏨';
-                  } else if (/tour|visit|explore/i.test(activityText)) {
-                    icon = '🔍';
-                  } else if (/show|theater|concert|music|performance/i.test(activityText)) {
-                    icon = '🎭';
-                  } else if (/beach|ocean|sea|swim/i.test(activityText)) {
-                    icon = '🏖️';
-                  }
-                  
-                  // Create a location with slight random variation from NYC center
-                  const location = {
-                    lat: 40.7580 + (Math.random() * 0.1 - 0.05),
-                    lng: -73.9855 + (Math.random() * 0.1 - 0.05)
-                  };
-                  
-                  return {
-                    time: activity.time || `${9 + actIndex}:00 AM`,
-                    title: activity.activity,
-                    description: activity.description || '',
-                    icon,
-                    location
-                  };
-                });
-                
-                days.push({
-                  day: parseInt(dayNum) || dayIndex + 1,
-                  activities
-                });
-              });
-              
-              parsedItinerary = { days };
-            } else {
-              // Fall back to text parsing if the structure isn't as expected
-              responseText = JSON.stringify(response.response, null, 2);
-              parsedItinerary = parseItineraryFromText(responseText);
-            }
-          } catch (error) {
-            console.error('Error processing complex itinerary:', error);
-            responseText = JSON.stringify(response.response);
-            parsedItinerary = parseItineraryFromText(responseText);
+            const parsedResponse = JSON.parse(response.response);
+            processItineraryResponse(parsedResponse);
+          } catch (e) {
+            console.error('Error parsing string response:', e);
           }
+        } else {
+          processItineraryResponse(response.response);
         }
       }
       
-      if (parsedItinerary && parsedItinerary.days && parsedItinerary.days.length > 0) {
-        setItineraryData(parsedItinerary);
-        
-        // If on mobile, switch to itinerary view
-        if (isMobile) {
-          setActiveTab('itinerary');
-        }
+      // If on mobile, switch to itinerary view
+      if (isMobile && itineraryData) {
+        setActiveTab('itinerary');
       }
       
       setIsLoading(false);
     } catch (error) {
       console.error('Error processing message:', error);
       setIsLoading(false);
+    }
+  };
+
+  const processItineraryResponse = (response) => {
+    if (response.daily_itinerary) {
+      // Transform the itinerary data for display
+      const days = Object.keys(response.daily_itinerary).map(dayNum => {
+        const dayData = response.daily_itinerary[dayNum];
+        const activities = Array.isArray(dayData.activities) 
+          ? dayData.activities.map(activity => ({
+              time: activity.time || '',
+              title: activity.title || '',
+              description: activity.details?.location || '',
+              icon: getActivityIcon(activity),
+              location: activity.details?.location ? {
+                lat: 0, // You'll need to geocode these addresses
+                lng: 0
+              } : null
+            }))
+          : [];
+        
+        return {
+          day: parseInt(dayNum.replace('day_', '')),
+          activities
+        };
+      });
+      
+      setItineraryData({ days });
+    }
+  };
+
+  // Helper function to determine activity icon
+  const getActivityIcon = (activity) => {
+    const type = activity.type?.toLowerCase() || '';
+    const category = activity.category?.toLowerCase() || '';
+    
+    if (type.includes('dining') || category.includes('lunch') || category.includes('dinner') || 
+        category.includes('breakfast') || category.includes('food')) {
+      return '🍽️';
+    } else if (type.includes('attraction') || category.includes('museum') || category.includes('gallery') || 
+               category.includes('aquarium') || category.includes('landmark')) {
+      return '🏛️';
+    } else if (type.includes('transportation') || category.includes('flight')) {
+      return '✈️';
+    } else if (type.includes('accommodation') || category.includes('hotel')) {
+      return '🏨';
+    } else if (category.includes('park') || category.includes('nature')) {
+      return '🌳';
+    } else if (category.includes('tour')) {
+      return '🔍';
+    } else {
+      return '📍';
     }
   };
 
