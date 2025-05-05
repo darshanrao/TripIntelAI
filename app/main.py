@@ -14,6 +14,7 @@ import subprocess
 import time
 from pathlib import Path
 from dotenv import load_dotenv
+import logging
 
 # Import our pipeline functions
 from app.pipeline import process_travel_query, process_feedback, Spinner
@@ -58,6 +59,12 @@ AUDIO_DIR.mkdir(exist_ok=True)
 # Include the flight booking router
 app.include_router(flight_booking_router)
 
+class AnalyzeInputRequest(BaseModel):
+    """Request model for analyzing user input."""
+    input: str
+    user_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
 class ChatRequest(BaseModel):
     """Request model for all chat-based interactions."""
     message: Optional[str] = None  # Text input from user
@@ -84,7 +91,9 @@ async def handle_interaction(request: ChatRequest):
     Handles: chat messages, flight selection, feedback, and other interactions.
     """
     try:
-        print(f"[DEBUG] Received interaction: {request.dict()}")
+        # Setup a proper logger
+        logger = logging.getLogger("app.interaction")
+        logger.info(f"Received interaction: {request.dict()}")
         
         # Initialize or get conversation state
         state = conversation_states.get(request.conversation_id, {})
@@ -97,10 +106,18 @@ async def handle_interaction(request: ChatRequest):
         elif request.interaction_type == "feedback":
             return await handle_feedback_interaction(request, state)
         else:  # Default to chat interaction
+            if not request.message:
+                return InteractionResponse(
+                    conversation_id=request.conversation_id,
+                    success=False,
+                    message="Message cannot be empty",
+                    error="No message provided"
+                )
             return await handle_chat_interaction(request, state)
             
     except Exception as e:
-        print(f"[ERROR] Error in handle_interaction: {str(e)}")
+        logger = logging.getLogger("app.interaction")
+        logger.error(f"Error in handle_interaction: {str(e)}")
         import traceback
         traceback.print_exc()
         return InteractionResponse(
@@ -112,14 +129,22 @@ async def handle_interaction(request: ChatRequest):
 
 async def handle_chat_interaction(request: ChatRequest, state: Dict[str, Any]) -> InteractionResponse:
     """Handle general chat interactions."""
+    logger = logging.getLogger("app.chat")
     try:
         # Process the chat message
         state["query"] = request.message
-        state = await process_travel_query(request.message, interactive=True)
-        conversation_states[request.conversation_id] = state
+        
+        # Only process if not already processed
+        if not state.get("planning_complete"):
+            logger.info(f"Processing chat message: '{request.message}'")
+            state = await process_travel_query(request.message, interactive=True)
+            conversation_states[request.conversation_id] = state
+        else:
+            logger.info("Skipping processing - planning already complete")
         
         # If validation failed
         if not state.get("is_valid", False):
+            logger.warning("Validation failed for chat message")
             return InteractionResponse(
                 conversation_id=request.conversation_id,
                 success=True,
@@ -137,6 +162,7 @@ async def handle_chat_interaction(request: ChatRequest, state: Dict[str, Any]) -
             
         # If we need flight selection
         if state.get("flights") and not state.get("selected_flights"):
+            logger.info("Flight selection needed")
             return InteractionResponse(
                 conversation_id=request.conversation_id,
                 success=True,
@@ -151,6 +177,7 @@ async def handle_chat_interaction(request: ChatRequest, state: Dict[str, Any]) -
             
         # If we have a complete itinerary
         if state.get("itinerary"):
+            logger.info("Returning complete itinerary")
             return InteractionResponse(
                 conversation_id=request.conversation_id,
                 success=True,
@@ -183,7 +210,7 @@ async def handle_chat_interaction(request: ChatRequest, state: Dict[str, Any]) -
         )
         
     except Exception as e:
-        print(f"[ERROR] Error in handle_chat_interaction: {str(e)}")
+        logger.error(f"Error in handle_chat_interaction: {str(e)}")
         raise
 
 async def handle_flight_interaction(request: ChatRequest, state: Dict[str, Any]) -> InteractionResponse:
@@ -294,10 +321,17 @@ async def handle_feedback_interaction(request: ChatRequest, state: Dict[str, Any
         print(f"[ERROR] Error in handle_feedback_interaction: {str(e)}")
         raise
 
-# Remove or deprecate old endpoints
 @app.post("/chat", response_model=InteractionResponse)
 async def chat_query(request: ChatRequest):
     """Deprecated: Use /interact endpoint instead."""
+    if not request.message:
+        return InteractionResponse(
+            conversation_id=request.conversation_id or str(uuid.uuid4()),
+            success=False,
+            message="Message cannot be empty",
+            error="No message provided"
+        )
+    # Don't call handle_interaction again, just forward to /interact endpoint
     return await handle_interaction(request)
 
 @app.post("/feedback", response_model=InteractionResponse)
@@ -338,10 +372,8 @@ async def root():
         "endpoints": {
             "/interact": "For all types of interactions",
             "/generate-itinerary": "For structured trip data",
-            "/conversations": "List all active conversations",
-            "/conversations/{conversation_id}": "Get or delete a conversation",
-            "/trips": "Get saved trips",
-            "/trips/{trip_id}": "Get specific trip details"
+            "/conversations": "Create new conversations",
+            "/search": "Search for travel options"
         }
     }
 
@@ -351,73 +383,6 @@ async def create_conversation():
     try:
         conversation_id = str(uuid.uuid4())
         return {"conversation_id": conversation_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/conversations/{conversation_id}", response_model=List[ChatMessageHistory])
-async def get_conversation_history(conversation_id: str):
-    """Get message history for a specific conversation."""
-    try:
-        # Check if we have an active conversation with this ID
-        if conversation_id in conversation_states and "conversation_history" in conversation_states[conversation_id]:
-            # Return actual conversation history
-            return conversation_states[conversation_id]["conversation_history"]
-        
-        # Mock implementation - would fetch from database in production
-        return [
-            {
-                "role": "user",
-                "content": "I want to plan a trip to Paris",
-                "timestamp": "2023-07-15T10:30:00Z"
-            },
-            {
-                "role": "assistant",
-                "content": "Great! When would you like to go to Paris and for how many people?",
-                "timestamp": "2023-07-15T10:30:05Z"
-            }
-        ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/trips", response_model=SavedTrip)
-async def save_trip(trip_data: TripData, name: Optional[str] = None, user_id: Optional[str] = None):
-    """Save a trip plan."""
-    try:
-        import uuid
-        from datetime import datetime
-        
-        trip_id = str(uuid.uuid4())
-        current_time = datetime.now().isoformat()
-        
-        saved_trip = {
-            "trip_id": trip_id,
-            "user_id": user_id,
-            "trip_data": trip_data,
-            "created_at": current_time,
-            "name": name or f"Trip to {trip_data.metadata.destination}"
-        }
-        
-        # In production: save to database here
-        
-        return saved_trip
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/trips", response_model=List[SavedTrip])
-async def get_saved_trips(user_id: Optional[str] = None):
-    """Get all saved trips, optionally filtered by user ID."""
-    try:
-        # Mock implementation - would fetch from database in production
-        return []  # Empty list for now
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/trips/{trip_id}", response_model=SavedTrip)
-async def get_trip(trip_id: str):
-    """Get details for a specific saved trip."""
-    try:
-        # Mock implementation - would fetch from database in production
-        raise HTTPException(status_code=404, detail="Trip not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1149,8 +1114,9 @@ async def process_remaining_nodes(state, nodes_to_call, conversation_id):
         print("[DEBUG] Generating itinerary")
         state = await summary_node(state)
         
-        # Mark planning as complete - this is used by continue-processing endpoint
+        # Mark planning as complete and clear nodes_to_call to prevent reprocessing
         state["planning_complete"] = True
+        state["nodes_to_call"] = []  # Clear the nodes to prevent reprocessing
         
         # Save updated state
         conversation_states[conversation_id] = state
@@ -1264,4 +1230,13 @@ if __name__ == "__main__":
     print("- Using real flight data APIs (matching CLI behavior)")
     print("- Supporting step-by-step workflow with flight selection")
     print("- Ready to process travel planning requests")
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    
+    # Use environment variable to control reload mode - this is only used when running directly from this file
+    # For production, use run.py which has its own control for reload
+    is_dev = os.getenv("DEV_MODE", "False").lower() == "true"
+    if is_dev:
+        print("- Running in development mode with hot reload enabled")
+        uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    else:
+        print("- Running in production mode")
+        uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
