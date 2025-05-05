@@ -13,7 +13,7 @@ const TypingIndicator = () => (
   </div>
 );
 
-const ChatInterface = ({ onSendMessage }) => {
+const ChatInterface = ({ onSendMessage, apiResponse }) => {
   const [messages, setMessages] = useState([
     { id: 1, text: "Hi there! I'm your AI travel assistant. Where would you like to go?", sender: 'ai', timestamp: new Date() }
   ]);
@@ -317,9 +317,25 @@ const ChatInterface = ({ onSendMessage }) => {
         timestamp: new Date()
       }]);
       
-      // If we're in step-by-step mode, continue to process the rest of the trip
-      if (flightResponse.step_by_step && flightResponse.in_progress) {
-        // Add a message to indicate we're continuing
+      // Check if we need to continue processing
+      if (flightResponse.interaction_type === 'feedback' && flightResponse.data) {
+        // We already have the complete itinerary, no need for continueProcessing
+        
+        // Add the itinerary message
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: formatItineraryText(flightResponse.data),
+          sender: 'ai',
+          timestamp: new Date(),
+          hasItinerary: true
+        }]);
+        
+        // Notify parent component with the itinerary data
+        if (onSendMessage && typeof onSendMessage === 'function') {
+          onSendMessage(JSON.stringify(flightResponse.data));
+        }
+      } else {
+        // Add a message indicating we're continuing
         setMessages(prev => [...prev, {
           id: Date.now() + 1, 
           text: "Generating your complete itinerary...",
@@ -336,15 +352,21 @@ const ChatInterface = ({ onSendMessage }) => {
         // Remove the temporary message
         setMessages(prev => prev.filter(msg => !msg.isTemporary));
         
-        // Check if we got a valid itinerary
-        if (finalResponse.itinerary) {
-          // Add the final itinerary to the chat
+        // Check if we got a valid itinerary data
+        if (finalResponse.data?.itinerary || finalResponse.data?.daily_itinerary) {
+          // Format and add the itinerary to chat
           setMessages(prev => [...prev, {
             id: Date.now() + 2,
-            text: finalResponse.itinerary,
+            text: formatItineraryText(finalResponse.data),
             sender: 'ai',
-            timestamp: new Date()
+            timestamp: new Date(),
+            hasItinerary: true
           }]);
+          
+          // Notify parent component with the itinerary data
+          if (onSendMessage && typeof onSendMessage === 'function') {
+            onSendMessage(JSON.stringify(finalResponse.data));
+          }
         } else if (finalResponse.error) {
           // Add the error message
           setMessages(prev => [...prev, {
@@ -381,189 +403,78 @@ const ChatInterface = ({ onSendMessage }) => {
       setIsTyping(false);
     }
   };
+  
+  // Helper function to format itinerary text from response data
+  const formatItineraryText = (data) => {
+    if (!data) return "No itinerary data available.";
+    
+    // Check various possible fields where itinerary might be
+    if (data.daily_itinerary) {
+      // Format daily itinerary
+      return Object.keys(data.daily_itinerary).map(day => {
+        const activities = Array.isArray(data.daily_itinerary[day]) 
+          ? data.daily_itinerary[day] 
+          : data.daily_itinerary[day].activities || [];
+        
+        return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity || a.title || ''}`).join('\n')}`;
+      }).join('\n\n');
+    } else if (data.trip_summary) {
+      // Format trip summary
+      const summary = data.trip_summary;
+      return `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
+    } else if (data.itinerary) {
+      // Use provided itinerary string/object
+      return typeof data.itinerary === 'string' 
+        ? data.itinerary 
+        : JSON.stringify(data.itinerary, null, 2);
+    } else {
+      // Generic message if no recognized format
+      return "Your trip has been planned. You can view the details in the itinerary tab.";
+    }
+  };
 
+  // Handle message sending
   const handleSendMessage = async () => {
     if (inputText.trim() === '') return;
     
-    // Add user message
+    // Add user message to chat
+    const userMessageText = inputText;
     const newUserMessage = {
       id: Date.now(),
-      text: inputText,
+      text: userMessageText,
       sender: 'user',
       timestamp: new Date()
     };
     
     setMessages(prev => [...prev, newUserMessage]);
-    const userMessageText = inputText;
     setInputText('');
-    
-    // Notify parent component
-    onSendMessage(userMessageText);
     
     // Show typing indicator
     setIsTyping(true);
     
-    try {
-      // Ensure we have a conversation ID
-      if (!conversationId) {
-        // Try to create one if missing
-        try {
-          const convResponse = await createConversation();
-          if (convResponse && convResponse.conversation_id) {
-            setConversationId(convResponse.conversation_id);
-          }
-        } catch (convError) {
-          console.error('Error creating conversation on demand:', convError);
-        }
+    // Notify parent component to handle API call
+    if (onSendMessage && typeof onSendMessage === 'function') {
+      try {
+        // Pass the message to parent - let parent handle API call
+        onSendMessage(userMessageText);
+      } catch (error) {
+        console.error('Error in parent handler:', error);
+        
+        // Handle error locally if parent fails
+        setIsTyping(false);
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: "Sorry, I'm having trouble processing your request. Please try again later.",
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
       }
-      
-      console.log('Sending message with conversation ID:', conversationId);
-      
-      // Send message to backend
-      const response = await sendChatMessage(userMessageText, conversationId);
-      console.log("Response from sendChatMessage:", response);
-      
-      // Hide typing indicator
+    } else {
+      // If no parent handler, show error
       setIsTyping(false);
-      
-      // Check if this is a flight selection request
-      if (response.selection_type === 'flight' && response.flight_options && response.flight_options.length > 0) {
-        console.log(`Received ${response.flight_options.length} flight options`);
-        
-        // Store flight options in state
-        setFlightOptions(response.flight_options);
-        
-        // First add a message asking to select flights
-        setMessages(prev => [...prev, {
-          id: Date.now() - 1,
-          text: response.next_question || "Please select a flight that best suits your needs:",
-          sender: 'ai',
-          timestamp: new Date()
-        }]);
-        
-        // Then add the flight selection UI to the chat
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          isFlightSelection: true,
-          flightOptions: response.flight_options,
-          sender: 'ai',
-          timestamp: new Date()
-        }]);
-        
-        return;
-      }
-      
-      // Check if feedback question exists and display it in the chat
-      if (response.feedback_question) {
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          text: response.feedback_question,
-          sender: 'ai',
-          timestamp: new Date()
-        }]);
-      }
-      
-      // Prepare response text - handle complex objects
-      let responseText = "";
-      let hasItinerary = false;
-      
-      if (response.response) {
-        if (typeof response.response === 'string') {
-          // Try to parse JSON string responses
-          try {
-            const parsedResponse = JSON.parse(response.response);
-            if (parsedResponse.daily_itinerary || parsedResponse.trip_summary) {
-              // This is an itinerary - format it for the chat
-              if (parsedResponse.daily_itinerary) {
-                const dailyItinerary = parsedResponse.daily_itinerary;
-                // Format itinerary days
-                responseText = Object.keys(dailyItinerary).map(day => {
-                  const activities = dailyItinerary[day];
-                  return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity || a.title || ''}`).join('\n')}`;
-                }).join('\n\n');
-              } else if (parsedResponse.trip_summary) {
-                // Format trip summary
-                const summary = parsedResponse.trip_summary;
-                responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
-              }
-              hasItinerary = true;
-            } else {
-              // Just a regular JSON response
-              responseText = JSON.stringify(parsedResponse, null, 2);
-            }
-          } catch (e) {
-            // Not valid JSON, use as-is
-            responseText = response.response;
-          }
-        } else {
-          // It's already an object
-          if (response.response.daily_itinerary) {
-            const dailyItinerary = response.response.daily_itinerary;
-            // Format itinerary days
-            responseText = Object.keys(dailyItinerary).map(day => {
-              const activities = Array.isArray(dailyItinerary[day]) 
-                ? dailyItinerary[day] 
-                : dailyItinerary[day].activities || [];
-              
-              return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity || a.title || ''}`).join('\n')}`;
-            }).join('\n\n');
-            hasItinerary = true;
-          } else if (response.response.trip_summary) {
-            // Format trip summary
-            const summary = response.response.trip_summary;
-            responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
-            hasItinerary = true;
-          } else {
-            // Fall back to JSON.stringify with formatting
-            responseText = JSON.stringify(response.response, null, 2);
-          }
-        }
-      } else if (response.itinerary) {
-        responseText = typeof response.itinerary === 'string' 
-          ? response.itinerary 
-          : JSON.stringify(response.itinerary);
-        hasItinerary = true;
-      } else if (response.error) {
-        responseText = `Error: ${response.error}`;
-      } else if (response.message) {
-        responseText = response.message;
-      } else if (response.result) {
-        // Handle 'result' field which might contain the itinerary
-        if (typeof response.result === 'string') {
-          responseText = response.result;
-        } else {
-          responseText = JSON.stringify(response.result, null, 2);
-        }
-        hasItinerary = true;
-      } else {
-        responseText = "I couldn't process that request. Can you try again?";
-      }
-      
-      // Add AI response to chat
-      const aiResponse = {
-        id: Date.now() + 1,
-        text: responseText,
-        sender: 'ai',
-        timestamp: new Date(),
-        hasItinerary: hasItinerary
-      };
-      
-      setMessages(prev => [...prev, aiResponse]);
-      
-      // Update conversation ID if provided
-      if (response.conversation_id) {
-        setConversationId(response.conversation_id);
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      
-      // Hide typing indicator
-      setIsTyping(false);
-      
-      // Add error message
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
-        text: "Sorry, I'm having trouble connecting to the server. Please try again later.",
+        text: "Chat service is currently unavailable. Please try again later.",
         sender: 'ai',
         timestamp: new Date()
       }]);
@@ -580,6 +491,158 @@ const ChatInterface = ({ onSendMessage }) => {
       }
     };
   }, []);
+
+  // Process API response when it changes
+  useEffect(() => {
+    if (!apiResponse) return;
+    
+    console.log("Processing API response:", apiResponse);
+    
+    // Hide typing indicator
+    setIsTyping(false);
+    
+    // Check if response is valid
+    if (!apiResponse) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        text: "Sorry, I received an empty response from the server. Please try again.",
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      return;
+    }
+    
+    // Check if this is a flight selection request
+    if (apiResponse.interaction_type === 'flight_selection' && apiResponse.data?.flights) {
+      console.log(`Received flight options for selection`);
+      
+      // Store flight options in state
+      setFlightOptions(apiResponse.data.flights);
+      
+      // First add a message asking to select flights
+      setMessages(prev => [...prev, {
+        id: Date.now() - 1,
+        text: apiResponse.message || "Please select a flight that best suits your needs:",
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      
+      // Then add the flight selection UI to the chat
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        isFlightSelection: true,
+        flightOptions: apiResponse.data.flights,
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      
+      return;
+    }
+    
+    // Handle legacy flight selection format
+    if (apiResponse.selection_type === 'flight' && apiResponse.flight_options && apiResponse.flight_options.length > 0) {
+      console.log(`Received ${apiResponse.flight_options.length} flight options (legacy format)`);
+      
+      // Store flight options in state
+      setFlightOptions(apiResponse.flight_options);
+      
+      // First add a message asking to select flights
+      setMessages(prev => [...prev, {
+        id: Date.now() - 1,
+        text: apiResponse.next_question || "Please select a flight that best suits your needs:",
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      
+      // Then add the flight selection UI to the chat
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        isFlightSelection: true,
+        flightOptions: apiResponse.flight_options,
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      
+      return;
+    }
+    
+    // Check if feedback question exists and display it in the chat
+    if (apiResponse.interaction_type === 'feedback' || apiResponse.feedback_question) {
+      const feedbackText = apiResponse.message || apiResponse.feedback_question || "Would you like to modify anything in your itinerary?";
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: feedbackText,
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+    }
+    
+    // Prepare response text - handle complex objects
+    let responseText = "";
+    let hasItinerary = false;
+    
+    // First check if we have itinerary data in the response.data field
+    if (apiResponse.data && (apiResponse.data.daily_itinerary || apiResponse.data.trip_summary || apiResponse.data.itinerary)) {
+      responseText = formatItineraryText(apiResponse.data);
+      hasItinerary = true;
+    } else if (apiResponse.response) {
+      if (typeof apiResponse.response === 'string') {
+        // Try to parse JSON string responses
+        try {
+          const parsedResponse = JSON.parse(apiResponse.response);
+          if (parsedResponse.daily_itinerary || parsedResponse.trip_summary) {
+            // This is an itinerary - format it using our helper
+            responseText = formatItineraryText(parsedResponse);
+            hasItinerary = true;
+          } else {
+            // Just a regular JSON response
+            responseText = JSON.stringify(parsedResponse, null, 2);
+          }
+        } catch (e) {
+          // Not valid JSON, use as-is
+          responseText = apiResponse.response;
+        }
+      } else {
+        // It's already an object
+        if (apiResponse.response.daily_itinerary || apiResponse.response.trip_summary) {
+          responseText = formatItineraryText(apiResponse.response);
+          hasItinerary = true;
+        } else {
+          // Fall back to JSON.stringify with formatting
+          responseText = JSON.stringify(apiResponse.response, null, 2);
+        }
+      }
+    } else if (apiResponse.itinerary) {
+      responseText = typeof apiResponse.itinerary === 'string' 
+        ? apiResponse.itinerary 
+        : JSON.stringify(apiResponse.itinerary);
+      hasItinerary = true;
+    } else if (apiResponse.error) {
+      responseText = `Error: ${apiResponse.error}`;
+    } else if (apiResponse.message) {
+      responseText = apiResponse.message;
+    } else {
+      responseText = "I couldn't process that request. Can you try again?";
+    }
+    
+    // Add AI response to chat (only if not already handled)
+    if (responseText) {
+      const aiResponse = {
+        id: Date.now() + 1,
+        text: responseText,
+        sender: 'ai',
+        timestamp: new Date(),
+        hasItinerary: hasItinerary
+      };
+      
+      setMessages(prev => [...prev, aiResponse]);
+    }
+    
+    // Update conversation ID if provided
+    if (apiResponse.conversation_id) {
+      setConversationId(apiResponse.conversation_id);
+    }
+  }, [apiResponse]);
 
   return (
     <div className="flex flex-col h-full">

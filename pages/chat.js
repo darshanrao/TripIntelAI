@@ -12,6 +12,7 @@ export default function Home() {
   const [isMobile, setIsMobile] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
   const [isLoading, setIsLoading] = useState(false);
+  const [apiResponse, setApiResponse] = useState(null);
 
   useEffect(() => {
     // Check if the screen is mobile
@@ -40,14 +41,19 @@ export default function Home() {
       const response = await sendChatMessage(message);
       console.log('API response:', response);
       
+      // Store the API response to pass to the ChatInterface
+      setApiResponse(response);
+      
       if (response.error) {
         console.error('API returned an error:', response.error);
         setIsLoading(false);
         return;
       }
       
-      // Parse the itinerary from API response
-      if (response.response) {
+      // Process itinerary data for the middle and right columns
+      if (response.data?.daily_itinerary) {
+        processItineraryResponse(response.data);
+      } else if (response.response) {
         if (typeof response.response === 'string') {
           try {
             const parsedResponse = JSON.parse(response.response);
@@ -58,9 +64,11 @@ export default function Home() {
         } else {
           processItineraryResponse(response.response);
         }
+      } else if (response.itinerary && typeof response.itinerary === 'object') {
+        processItineraryResponse(response.itinerary);
       }
       
-      // If on mobile, switch to itinerary view
+      // If on mobile, switch to itinerary view when we have data
       if (isMobile && itineraryData) {
         setActiveTab('itinerary');
       }
@@ -68,6 +76,13 @@ export default function Home() {
       setIsLoading(false);
     } catch (error) {
       console.error('Error processing message:', error);
+      
+      // Set error response
+      setApiResponse({
+        error: error.message,
+        message: "Sorry, there was an error processing your request."
+      });
+      
       setIsLoading(false);
     }
   };
@@ -180,6 +195,7 @@ export default function Home() {
         >
           <ChatInterface 
             onSendMessage={handleChatMessage} 
+            apiResponse={apiResponse}
             key="chat-interface"
           />
         </motion.div>

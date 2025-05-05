@@ -113,6 +113,12 @@ export const sendChatMessage = async (message, conversationId = null) => {
         step_by_step: true // Ensure step-by-step is sent
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
   } catch (error) {
     console.error('API error:', error);
     throw error;
@@ -267,17 +273,17 @@ export const saveAndProcessAudio = async (audioBlob) => {
  */
 export const selectFlight = async (flightIndex, conversationId) => {
   try {
-    const response = await fetch(`${API_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    console.log(`Selecting flight ${flightIndex} for conversation ${conversationId}`);
+    
+    return await executeRequest('/chat', 'POST', { 
+      conversation_id: conversationId,
+      interaction_type: 'flight_selection',
+      selection_data: {
+        flight_index: flightIndex
       },
-      body: JSON.stringify({ 
-        selection_type: 'flight',
-        selection_index: flightIndex,
-        conversation_id: conversationId,
-        step_by_step: true // Add this flag to indicate step-by-step mode
-      }),
+      metadata: {
+        step_by_step: true
+      }
     });
   } catch (error) {
     console.error('API error:', error);
@@ -292,15 +298,10 @@ export const selectFlight = async (flightIndex, conversationId) => {
  */
 export const continueProcessing = async (conversationId) => {
   try {
-    const response = await fetch(`${API_URL}/continue-processing`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        conversation_id: conversationId,
-        step_by_step: true
-      }),
+    console.log(`Continuing processing for conversation ${conversationId}`);
+    
+    return await executeRequest('/continue-processing', 'POST', { 
+      conversation_id: conversationId
     });
   } catch (error) {
     console.error('API error continuing processing:', error);
