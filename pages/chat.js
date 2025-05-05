@@ -26,6 +26,40 @@ export default function Home() {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
+  // Process API response when it changes
+  useEffect(() => {
+    if (!apiResponse) return;
+    
+    console.log("Processing API response in Home:", apiResponse);
+    
+    try {
+      // Process itinerary data for both chat and itinerary views
+      if (apiResponse.data?.daily_itinerary) {
+        processItineraryResponse(apiResponse.data);
+      } else if (apiResponse.response) {
+        if (typeof apiResponse.response === 'string') {
+          try {
+            const parsedResponse = JSON.parse(apiResponse.response);
+            processItineraryResponse(parsedResponse);
+          } catch (e) {
+            console.error('Error parsing string response:', e);
+          }
+        } else {
+          processItineraryResponse(apiResponse.response);
+        }
+      } else if (apiResponse.itinerary && typeof apiResponse.itinerary === 'object') {
+        processItineraryResponse(apiResponse.itinerary);
+      }
+      
+      // If on mobile, switch to itinerary view when we have data
+      if (isMobile && itineraryData) {
+        setActiveTab('itinerary');
+      }
+    } catch (error) {
+      console.error('Error processing API response:', error);
+    }
+  }, [apiResponse]);
+
   const handleChatMessage = async (message) => {
     console.log('Message from chat:', message);
     
@@ -37,40 +71,17 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-      // Call the actual API with proper parameters
+      // Call the API
       const response = await sendChatMessage(message);
       console.log('API response:', response);
       
-      // Store the API response to pass to the ChatInterface
+      // Store the API response
       setApiResponse(response);
       
       if (response.error) {
         console.error('API returned an error:', response.error);
         setIsLoading(false);
         return;
-      }
-      
-      // Process itinerary data for the middle and right columns
-      if (response.data?.daily_itinerary) {
-        processItineraryResponse(response.data);
-      } else if (response.response) {
-        if (typeof response.response === 'string') {
-          try {
-            const parsedResponse = JSON.parse(response.response);
-            processItineraryResponse(parsedResponse);
-          } catch (e) {
-            console.error('Error parsing string response:', e);
-          }
-        } else {
-          processItineraryResponse(response.response);
-        }
-      } else if (response.itinerary && typeof response.itinerary === 'object') {
-        processItineraryResponse(response.itinerary);
-      }
-      
-      // If on mobile, switch to itinerary view when we have data
-      if (isMobile && itineraryData) {
-        setActiveTab('itinerary');
       }
       
       setIsLoading(false);
@@ -88,30 +99,26 @@ export default function Home() {
   };
 
   const processItineraryResponse = (response) => {
-    if (response.daily_itinerary) {
-      // Transform the itinerary data for display
-      const days = Object.keys(response.daily_itinerary).map(dayNum => {
-        const dayData = response.daily_itinerary[dayNum];
-        const activities = Array.isArray(dayData.activities) 
-          ? dayData.activities.map(activity => ({
-              time: activity.time || '',
-              title: activity.title || '',
-              description: activity.details?.location || '',
-              icon: getActivityIcon(activity),
-              location: activity.details?.location ? {
-                lat: 0, // You'll need to geocode these addresses
-                lng: 0
-              } : null
-            }))
-          : [];
-        
-        return {
-          day: parseInt(dayNum.replace('day_', '')),
-          activities
-        };
-      });
+    console.log("Processing itinerary response:", response);
+    
+    if (!response) {
+      console.error('Empty response received');
+      return;
+    }
+
+    try {
+      // Transform the data into the expected format for both views
+      const processedData = {
+        trip_summary: response.trip_summary || null,
+        daily_itinerary: response.daily_itinerary || {},
+        review_highlights: response.review_highlights || null,
+        flights: response.flights || []
+      };
       
-      setItineraryData({ days });
+      console.log("Processed itinerary data:", processedData);
+      setItineraryData(processedData);
+    } catch (error) {
+      console.error('Error processing itinerary data:', error);
     }
   };
 
@@ -140,7 +147,7 @@ export default function Home() {
   };
 
   // Get the current day's activities
-  const currentDayActivities = itineraryData?.days.find(day => day.day === selectedDay)?.activities || [];
+  const currentDayActivities = itineraryData?.daily_itinerary[`day_${selectedDay}`]?.activities || [];
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -202,16 +209,22 @@ export default function Home() {
 
         {/* Middle Column - Itinerary View */}
         <motion.div 
-          className={`${isMobile ? (activeTab === 'itinerary' ? 'flex-1' : 'hidden') : 'w-1/3 border-r'} flex flex-col`}
+          className={`${isMobile ? (activeTab === 'itinerary' ? 'flex-1' : 'hidden') : 'w-1/3 border-r'} flex flex-col bg-white`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          transition={{ duration: 0.5 }}
         >
-          <ItineraryView 
-            days={itineraryData?.days || []} 
-            selectedDay={selectedDay} 
-            onSelectDay={setSelectedDay}
-          />
+          {itineraryData ? (
+            <ItineraryView 
+              itineraryData={itineraryData}
+              apiResponse={apiResponse}
+              key="itinerary-view"
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-gray-500">
+              <p>Start chatting to generate your itinerary</p>
+            </div>
+          )}
         </motion.div>
 
         {/* Right Column - Map View */}
@@ -219,11 +232,11 @@ export default function Home() {
           className={`${isMobile ? (activeTab === 'map' ? 'flex-1' : 'hidden') : 'w-1/3'} flex flex-col`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          transition={{ duration: 0.5 }}
         >
           <MapView 
-            activities={currentDayActivities} 
-            day={selectedDay}
+            activities={currentDayActivities}
+            selectedDay={selectedDay}
           />
         </motion.div>
       </div>

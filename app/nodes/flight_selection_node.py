@@ -50,6 +50,7 @@ async def display_flight_options(flights: List[Dict[str, Any]], limit: int = 5) 
 async def get_user_flight_selection(flights: List[Dict[str, Any]], limit: int = 5) -> int:
     """
     Get user selection of flight option.
+    Now automatically returns the first flight option (index 0).
     
     Args:
         flights: List of flight dictionaries
@@ -58,26 +59,13 @@ async def get_user_flight_selection(flights: List[Dict[str, Any]], limit: int = 
     Returns:
         Index of selected flight (0-based)
     """
-    max_options = min(len(flights), limit)
-    
-    while True:
-        try:
-            selection = input(f"\nSelect a flight option (1-{max_options}): ")
-            
-            # Convert to integer and adjust to 0-based index
-            selection_idx = int(selection) - 1
-            
-            # Validate selection
-            if 0 <= selection_idx < max_options:
-                return selection_idx
-            else:
-                print(f"Please enter a number between 1 and {max_options}.")
-        except ValueError:
-            print("Please enter a valid number.")
+    # Always select the first flight (index 0)
+    print("\nAutomatically selecting the first flight option.")
+    return 0
 
 async def flight_selection_node(state: GraphState) -> GraphState:
     """
-    Interactive node that displays flight options and lets the user select one.
+    Interactive node that displays flight options and automatically selects the first one.
     
     Args:
         state: Current state containing flight options
@@ -97,14 +85,14 @@ async def flight_selection_node(state: GraphState) -> GraphState:
         # Display flight options to the user
         await display_flight_options(flights)
         
-        # Get user selection
-        selection_idx = await get_user_flight_selection(flights)
+        # Automatically select the first flight
+        selection_idx = 0
         
         # Update state with selected flight
         selected_flight = flights[selection_idx]
         state["selected_flights"] = [selected_flight]
         
-        print(f"\n✅ You selected flight option {selection_idx + 1}.")
+        print(f"\n✅ Automatically selected flight option {selection_idx + 1}.")
         
         return state
     

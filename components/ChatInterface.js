@@ -13,6 +13,37 @@ const TypingIndicator = () => (
   </div>
 );
 
+const ItineraryMessage = ({ data }) => {
+  if (!data || !data.trip_summary) return null;
+  
+  return (
+    <div className="bg-white rounded-lg shadow-sm p-4 my-2">
+      <h3 className="font-semibold text-lg mb-2">Trip Summary</h3>
+      <div className="text-sm text-gray-700">
+        <p><span className="font-medium">Destination:</span> {data.trip_summary.destination}</p>
+        <p><span className="font-medium">Dates:</span> {data.trip_summary.start_date} to {data.trip_summary.end_date}</p>
+        <p><span className="font-medium">Duration:</span> {data.trip_summary.duration_days} days</p>
+        <p><span className="font-medium">Total Budget:</span> ${data.trip_summary.total_budget?.toFixed(2)}</p>
+      </div>
+      
+      {data.daily_itinerary && Object.entries(data.daily_itinerary).map(([day, dayData]) => (
+        <div key={day} className="mt-4">
+          <h4 className="font-medium text-md">{day.replace('_', ' ').toUpperCase()}</h4>
+          <div className="ml-4">
+            {dayData.activities?.map((activity, idx) => (
+              <div key={idx} className="my-2">
+                <p className="text-sm">
+                  <span className="font-medium">{activity.time}:</span> {activity.title}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const ChatInterface = ({ onSendMessage, apiResponse }) => {
   const [messages, setMessages] = useState([
     { id: 1, text: "Hi there! I'm your AI travel assistant. Where would you like to go?", sender: 'ai', timestamp: new Date() }
@@ -203,7 +234,8 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
               id: Date.now() + 1,
               text: response.response,
               sender: 'ai',
-              timestamp: new Date()
+              timestamp: new Date(),
+              data: response.data
             };
             
             setMessages(prev => [...prev, aiResponse]);
@@ -408,73 +440,154 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
   const formatItineraryText = (data) => {
     if (!data) return "No itinerary data available.";
     
-    // Check various possible fields where itinerary might be
-    if (data.daily_itinerary) {
-      // Format daily itinerary
-      return Object.keys(data.daily_itinerary).map(day => {
-        const activities = Array.isArray(data.daily_itinerary[day]) 
-          ? data.daily_itinerary[day] 
-          : data.daily_itinerary[day].activities || [];
-        
-        return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity || a.title || ''}`).join('\n')}`;
-      }).join('\n\n');
-    } else if (data.trip_summary) {
-      // Format trip summary
-      const summary = data.trip_summary;
-      return `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
-    } else if (data.itinerary) {
-      // Use provided itinerary string/object
-      return typeof data.itinerary === 'string' 
-        ? data.itinerary 
-        : JSON.stringify(data.itinerary, null, 2);
-    } else {
-      // Generic message if no recognized format
-      return "Your trip has been planned. You can view the details in the itinerary tab.";
+    let text = "";
+    
+    // Format trip summary
+    if (data.trip_summary) {
+      text += "Trip Summary:\n";
+      text += `- Destination: ${data.trip_summary.destination || 'Not specified'}\n`;
+      text += `- Dates: ${data.trip_summary.start_date || 'Not specified'} to ${data.trip_summary.end_date || 'Not specified'}`;
+      if (data.trip_summary.duration_days) {
+        text += ` (${data.trip_summary.duration_days} days)`;
+      }
+      text += '\n';
+      if (data.trip_summary.total_budget) {
+        text += `- Total Budget: $${data.trip_summary.total_budget.toFixed(2)}\n`;
+      }
+      text += "\n";
     }
+    
+    // Format daily itinerary
+    if (data.daily_itinerary) {
+      text += "Daily Itinerary:\n\n";
+      Object.entries(data.daily_itinerary).forEach(([day, dayData]) => {
+        if (!dayData) return; // Skip if no data for this day
+        
+        text += `${day.replace('_', ' ').toUpperCase()}`;
+        if (dayData.date) {
+          text += ` (${dayData.date})`;
+        }
+        text += ':\n';
+        
+        if (dayData.activities && dayData.activities.length > 0) {
+          dayData.activities.forEach((activity, index) => {
+            if (!activity) return; // Skip if activity is null
+            
+            text += `${index + 1}. ${activity.time || ''} - ${activity.title || ''}`;
+            
+            if (activity.duration_minutes) {
+              const hours = Math.floor(activity.duration_minutes / 60);
+              const minutes = activity.duration_minutes % 60;
+              if (hours > 0 || minutes > 0) {
+                text += ` (${hours > 0 ? `${hours} hours` : ''}${minutes > 0 ? ` ${minutes} minutes` : ''})`;
+              }
+            }
+            
+            if (activity.details) {
+              if (activity.details.location) {
+                text += `\n   Location: ${activity.details.location}`;
+              }
+              if (activity.details.airline) {
+                text += `\n   Airline: ${activity.details.airline} ${activity.details.flight_number || ''}`;
+                if (activity.details.arrival_time) {
+                  text += `, arrives ${activity.details.arrival_time}`;
+                }
+              }
+            }
+            
+            if (activity.review_insights) {
+              if (activity.review_insights.strengths && activity.review_insights.strengths.length > 0) {
+                text += `\n   Highlights: ${activity.review_insights.strengths.join(", ")}`;
+              }
+            }
+            
+            text += "\n\n";
+          });
+        }
+      });
+    }
+    
+    // Format hotel review summary
+    if (data.review_highlights?.hotel_review_summary) {
+      const hotel = data.review_highlights.hotel_review_summary;
+      text += "Hotel Details:\n";
+      text += `${hotel.name || 'Hotel name not specified'}\n`;
+      if (hotel.rating) {
+        text += `- Rating: ${hotel.rating}/5\n`;
+      }
+      if (hotel.strengths && hotel.strengths.length > 0) {
+        text += "- Highlights:\n";
+        hotel.strengths.forEach(strength => {
+          text += `  • ${strength}\n`;
+        });
+      }
+      if (hotel.weaknesses && hotel.weaknesses.length > 0) {
+        text += "- Note:\n";
+        hotel.weaknesses.forEach(weakness => {
+          text += `  • ${weakness}\n`;
+        });
+      }
+      if (hotel.summary) {
+        text += `\nSummary: ${hotel.summary}\n`;
+      }
+      text += "\n";
+    }
+    
+    // Add modification options
+    text += "Would you like to modify anything? You can adjust:\n";
+    text += "1. Transportation (flights/routes)\n";
+    text += "2. Accommodations (hotel selection)\n";
+    text += "3. Activities (places to visit)\n";
+    text += "4. Dining options (restaurants)\n";
+    text += "5. Schedule (timing of activities)\n";
+    text += "6. Budget\n";
+    
+    return text;
   };
 
   // Handle message sending
   const handleSendMessage = async () => {
-    if (inputText.trim() === '') return;
+    if (!inputText.trim() && !isRecording) return;
     
-    // Add user message to chat
-    const userMessageText = inputText;
-    const newUserMessage = {
+    const userMessage = {
       id: Date.now(),
-      text: userMessageText,
+      text: inputText,
       sender: 'user',
       timestamp: new Date()
     };
     
-    setMessages(prev => [...prev, newUserMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputText('');
-    
-    // Show typing indicator
     setIsTyping(true);
     
-    // Notify parent component to handle API call
-    if (onSendMessage && typeof onSendMessage === 'function') {
-      try {
-        // Pass the message to parent - let parent handle API call
-        onSendMessage(userMessageText);
-      } catch (error) {
-        console.error('Error in parent handler:', error);
-        
-        // Handle error locally if parent fails
-        setIsTyping(false);
-        setMessages(prev => [...prev, {
+    try {
+      const response = await sendChatMessage(inputText, conversationId);
+      console.log('Chat response:', response);
+
+      const aiMessage = {
           id: Date.now() + 1,
-          text: "Sorry, I'm having trouble processing your request. Please try again later.",
+        text: response.message,
           sender: 'ai',
-          timestamp: new Date()
-        }]);
+        timestamp: new Date(),
+        data: response.data // Include the response data
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+      
+      // Handle flight options if present
+      if (response.data?.flights) {
+        setFlightOptions(response.data.flights);
       }
-    } else {
-      // If no parent handler, show error
+
       setIsTyping(false);
+      onSendMessage(inputText);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setIsTyping(false);
+      
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
-        text: "Chat service is currently unavailable. Please try again later.",
+        text: "Sorry, I encountered an error. Please try again.",
         sender: 'ai',
         timestamp: new Date()
       }]);
@@ -569,54 +682,47 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
     // Check if feedback question exists and display it in the chat
     if (apiResponse.interaction_type === 'feedback' || apiResponse.feedback_question) {
       const feedbackText = apiResponse.message || apiResponse.feedback_question || "Would you like to modify anything in your itinerary?";
+      
+      // Get the itinerary data from the correct location
+      const itineraryData = apiResponse.data?.itinerary || {};
+      
+      // Format the complete message with itinerary details
+      const completeText = `${feedbackText}\n\n${formatItineraryText(itineraryData)}`;
+      
+      // Add as a single message
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: feedbackText,
+        text: completeText,
         sender: 'ai',
-        timestamp: new Date()
+        timestamp: new Date(),
+        hasItinerary: true
       }]);
+      
+      // Early return to prevent duplicate messages
+      return;
     }
     
-    // Prepare response text - handle complex objects
+    // Handle other types of responses
     let responseText = "";
     let hasItinerary = false;
     
-    // First check if we have itinerary data in the response.data field
-    if (apiResponse.data && (apiResponse.data.daily_itinerary || apiResponse.data.trip_summary || apiResponse.data.itinerary)) {
-      responseText = formatItineraryText(apiResponse.data);
+    if (apiResponse.data?.itinerary) {
+      // Access the nested itinerary data
+      responseText = formatItineraryText(apiResponse.data.itinerary);
       hasItinerary = true;
     } else if (apiResponse.response) {
       if (typeof apiResponse.response === 'string') {
-        // Try to parse JSON string responses
         try {
           const parsedResponse = JSON.parse(apiResponse.response);
-          if (parsedResponse.daily_itinerary || parsedResponse.trip_summary) {
-            // This is an itinerary - format it using our helper
             responseText = formatItineraryText(parsedResponse);
             hasItinerary = true;
-          } else {
-            // Just a regular JSON response
-            responseText = JSON.stringify(parsedResponse, null, 2);
-          }
         } catch (e) {
-          // Not valid JSON, use as-is
           responseText = apiResponse.response;
         }
       } else {
-        // It's already an object
-        if (apiResponse.response.daily_itinerary || apiResponse.response.trip_summary) {
           responseText = formatItineraryText(apiResponse.response);
           hasItinerary = true;
-        } else {
-          // Fall back to JSON.stringify with formatting
-          responseText = JSON.stringify(apiResponse.response, null, 2);
-        }
       }
-    } else if (apiResponse.itinerary) {
-      responseText = typeof apiResponse.itinerary === 'string' 
-        ? apiResponse.itinerary 
-        : JSON.stringify(apiResponse.itinerary);
-      hasItinerary = true;
     } else if (apiResponse.error) {
       responseText = `Error: ${apiResponse.error}`;
     } else if (apiResponse.message) {
@@ -625,17 +731,15 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
       responseText = "I couldn't process that request. Can you try again?";
     }
     
-    // Add AI response to chat (only if not already handled)
+    // Add the response to chat if we have text and haven't handled it already
     if (responseText) {
-      const aiResponse = {
+      setMessages(prev => [...prev, {
         id: Date.now() + 1,
         text: responseText,
         sender: 'ai',
         timestamp: new Date(),
         hasItinerary: hasItinerary
-      };
-      
-      setMessages(prev => [...prev, aiResponse]);
+      }]);
     }
     
     // Update conversation ID if provided
@@ -644,66 +748,43 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
     }
   }, [apiResponse]);
 
+  // Modify the message rendering in the chat container
+  const renderMessage = (message) => {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
+      >
+        <div className={`rounded-lg px-4 py-2 max-w-[80%] ${
+          message.sender === 'user' ? 'bg-primary text-white' : 'bg-gray-100'
+        }`}>
+          <div className="text-sm whitespace-pre-wrap">{message.text}</div>
+        </div>
+      </motion.div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Chat messages container */}
       <div 
         ref={chatContainerRef}
-        className="flex-1 overflow-y-auto bg-white"
+        className="flex-1 overflow-y-auto p-4 space-y-4"
       >
-        <div>
-          {messages.map((message, index) => (
-            <div
-              key={message.id}
-              className={`px-4 py-6 ${message.sender === 'ai' ? 'bg-gray-50' : 'bg-white'} border-b border-gray-100`}
-            >
-              <div className="max-w-2xl mx-auto">
-                {message.isFlightSelection ? (
-                  <FlightSelection 
-                    flights={message.flightOptions} 
-                    onSelectFlight={handleFlightSelection}
-                  />
-                ) : (
-                  <div className="flex">
-                    <div className="w-7 h-7 rounded-full mr-4 flex-shrink-0">
-                      {message.sender === 'ai' ? (
-                        <div className="w-full h-full bg-black rounded-full flex items-center justify-center text-white text-xs font-medium">
-                          TI
-                        </div>
-                      ) : (
-                        <div className="w-full h-full bg-gray-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                          U
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className={`text-sm text-gray-800 ${message.isTemporary ? 'opacity-70' : ''} ${message.isRecording ? 'text-red-500 animate-pulse' : ''}`}>
-                        <p className="whitespace-pre-line leading-relaxed">{message.text}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          
+        {messages.map((message) => renderMessage(message))}
+        
+        {/* Typing indicator */}
           {isTyping && (
-            <div className="px-4 py-6 bg-gray-50 border-b border-gray-100">
-              <div className="max-w-2xl mx-auto">
-                <div className="flex">
-                  <div className="w-7 h-7 rounded-full mr-4 flex-shrink-0">
-                    <div className="w-full h-full bg-black rounded-full flex items-center justify-center text-white text-xs font-medium">
-                      TI
-                    </div>
-                  </div>
+          <div className="flex justify-start mb-4">
+            <div className="bg-gray-100 rounded-lg px-4 py-2">
                   <TypingIndicator />
-                </div>
               </div>
             </div>
           )}
           
-          <div ref={messageEndRef} className="h-2" />
-        </div>
+        {/* Message end ref for auto-scrolling */}
+        <div ref={messageEndRef} />
       </div>
       
       {/* Input area */}
