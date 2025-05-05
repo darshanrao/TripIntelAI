@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { FaMicrophone, FaPaperPlane, FaStop } from 'react-icons/fa';
 import { sendChatMessage, createConversation, saveAndProcessAudio, selectFlight, continueProcessing } from '../services/api';
 import FlightSelection from './FlightSelection';
 
 const TypingIndicator = () => (
-  <div className="flex items-center space-x-1 p-3 ml-2 bg-chat-ai rounded-lg max-w-xs shadow-sm typing-dots">
-    <span className="h-2 w-2 bg-gray-400 rounded-full"></span>
-    <span className="h-2 w-2 bg-gray-400 rounded-full"></span>
-    <span className="h-2 w-2 bg-gray-400 rounded-full"></span>
+  <div className="flex items-center space-x-1 py-1">
+    <div className="typing-dot"></div>
+    <div className="typing-dot"></div>
+    <div className="typing-dot"></div>
   </div>
 );
 
@@ -34,7 +34,12 @@ const ChatInterface = ({ onSendMessage }) => {
     const initConversation = async () => {
       try {
         const response = await createConversation();
-        setConversationId(response.conversation_id);
+        if (response && response.conversation_id) {
+          console.log('Conversation created with ID:', response.conversation_id);
+          setConversationId(response.conversation_id);
+        } else {
+          console.error('Failed to create conversation: Invalid response', response);
+        }
       } catch (error) {
         console.error('Failed to create conversation:', error);
       }
@@ -398,6 +403,21 @@ const ChatInterface = ({ onSendMessage }) => {
     setIsTyping(true);
     
     try {
+      // Ensure we have a conversation ID
+      if (!conversationId) {
+        // Try to create one if missing
+        try {
+          const convResponse = await createConversation();
+          if (convResponse && convResponse.conversation_id) {
+            setConversationId(convResponse.conversation_id);
+          }
+        } catch (convError) {
+          console.error('Error creating conversation on demand:', convError);
+        }
+      }
+      
+      console.log('Sending message with conversation ID:', conversationId);
+      
       // Send message to backend
       const response = await sendChatMessage(userMessageText, conversationId);
       console.log("Response from sendChatMessage:", response);
@@ -514,100 +534,156 @@ const ChatInterface = ({ onSendMessage }) => {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      {/* Chat header */}
-      <div className="bg-primary p-4 text-white shadow-sm">
-        <h2 className="text-xl font-semibold">Travel Assistant</h2>
-      </div>
-      
-      {/* Messages container */}
+    <div className="flex flex-col h-full">
+      {/* Chat messages container */}
       <div 
         ref={chatContainerRef}
-        className="flex-1 p-4 overflow-y-auto"
+        className="flex-1 overflow-y-auto bg-white"
       >
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <motion.div
+        <div>
+          {messages.map((message, index) => (
+            <div
               key={message.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className={`flex ${message.isFlightSelection ? 'w-full' : message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`px-4 py-6 ${message.sender === 'ai' ? 'bg-gray-50' : 'bg-white'} border-b border-gray-100`}
             >
-              {message.isFlightSelection ? (
-                <FlightSelection 
-                  flights={message.flightOptions} 
-                  onSelectFlight={handleFlightSelection}
-                />
-              ) : (
-                <div 
-                  className={`
-                    max-w-xs rounded-lg p-3 shadow-sm chat-bubble
-                    ${message.sender === 'user' 
-                      ? 'bg-primary text-white rounded-br-none' 
-                      : 'bg-chat-ai rounded-bl-none'
-                    }
-                    ${message.isTemporary ? 'opacity-60' : ''}
-                    ${message.isRecording ? 'animate-pulse' : ''}
-                  `}
-                >
-                  <p className="text-sm whitespace-pre-line">{message.text}</p>
-                  <p className="text-xs mt-1 opacity-70">
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              )}
-            </motion.div>
+              <div className="max-w-2xl mx-auto">
+                {message.isFlightSelection ? (
+                  <FlightSelection 
+                    flights={message.flightOptions} 
+                    onSelectFlight={handleFlightSelection}
+                  />
+                ) : (
+                  <div className="flex">
+                    <div className="w-7 h-7 rounded-full mr-4 flex-shrink-0">
+                      {message.sender === 'ai' ? (
+                        <div className="w-full h-full bg-black rounded-full flex items-center justify-center text-white text-xs font-medium">
+                          TI
+                        </div>
+                      ) : (
+                        <div className="w-full h-full bg-gray-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                          U
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className={`text-sm text-gray-800 ${message.isTemporary ? 'opacity-70' : ''} ${message.isRecording ? 'text-red-500 animate-pulse' : ''}`}>
+                        <p className="whitespace-pre-line leading-relaxed">{message.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           ))}
           
           {isTyping && (
-            <div className="flex justify-start">
-              <TypingIndicator />
+            <div className="px-4 py-6 bg-gray-50 border-b border-gray-100">
+              <div className="max-w-2xl mx-auto">
+                <div className="flex">
+                  <div className="w-7 h-7 rounded-full mr-4 flex-shrink-0">
+                    <div className="w-full h-full bg-black rounded-full flex items-center justify-center text-white text-xs font-medium">
+                      TI
+                    </div>
+                  </div>
+                  <TypingIndicator />
+                </div>
+              </div>
             </div>
           )}
           
-          <div ref={messageEndRef} />
+          <div ref={messageEndRef} className="h-2" />
         </div>
       </div>
       
       {/* Input area */}
-      <div className="border-t border-gray-200 p-3 bg-white">
-        <div className="flex items-center space-x-2">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="Type your message..."
-            className="flex-1 rounded-full border border-gray-300 py-2 px-4 focus:outline-none focus:ring-2 focus:ring-primary"
-            disabled={isRecording}
-          />
-          
-          {isRecording ? (
-            <button 
-              onClick={stopRecording}
-              className="bg-red-500 text-white p-3 rounded-full shadow-md hover:bg-red-600 transition-colors"
-            >
-              <FaStop />
-            </button>
-          ) : (
-            <button 
-              onClick={startRecording}
-              className="bg-gray-200 text-gray-600 p-3 rounded-full shadow-md hover:bg-gray-300 transition-colors"
-            >
-              <FaMicrophone />
-            </button>
-          )}
-          
-          <button 
-            onClick={handleSendMessage}
-            className="bg-primary text-white p-3 rounded-full shadow-md hover:bg-blue-600 transition-colors"
-            disabled={isRecording}
-          >
-            <FaPaperPlane />
-          </button>
+      <div className="border-t border-gray-200 bg-white px-4 py-3">
+        <div className="max-w-lg mx-auto">
+          <div className="relative">
+            <textarea
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              placeholder="Message Travel Assistant..."
+              className="w-full px-5 py-3 pr-24 border border-gray-300 rounded-full focus:outline-none focus:border-gray-400 focus:ring-0 resize-none"
+              rows={1}
+              style={{ 
+                minHeight: '46px', 
+                maxHeight: '200px' 
+              }}
+              disabled={isRecording}
+            />
+            
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-3">
+              {isRecording ? (
+                <button 
+                  onClick={stopRecording}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-red-500 transition-colors"
+                >
+                  <FaStop className="text-sm" />
+                </button>
+              ) : (
+                <button 
+                  onClick={startRecording}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+                >
+                  <FaMicrophone className="text-sm" />
+                </button>
+              )}
+              
+              <button 
+                onClick={handleSendMessage}
+                disabled={inputText.trim() === '' || isRecording}
+                className={`w-9 h-9 flex items-center justify-center rounded-full ${
+                  inputText.trim() === '' || isRecording 
+                    ? 'text-gray-300' 
+                    : 'text-white bg-black hover:bg-gray-800'
+                } transition-colors`}
+              >
+                <FaPaperPlane className="text-xs" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+      
+      <style jsx global>{`
+        /* Custom typing indicator styles */
+        .typing-dot {
+          background-color: #333;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          animation: typingAnimation 1.4s infinite ease-in-out both;
+        }
+        
+        .typing-dot:nth-child(1) {
+          animation-delay: 0s;
+        }
+        
+        .typing-dot:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+        
+        .typing-dot:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+        
+        @keyframes typingAnimation {
+          0%, 100% {
+            transform: scale(0.8);
+            opacity: 0.6;
+          }
+          50% {
+            transform: scale(1.2);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 };
