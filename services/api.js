@@ -1,5 +1,87 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// Keep track of in-flight requests to prevent duplicates
+const pendingRequests = new Map();
+// Map to track recently made requests by their parameters hash
+const recentRequests = new Map();
+// Default cache expiration time (ms)
+const CACHE_EXPIRATION = 1000;
+
+/**
+ * Generate a unique hash for request parameters to detect duplicates
+ * @param {string} endpoint - API endpoint
+ * @param {object} params - Request parameters
+ * @returns {string} - Hash string 
+ */
+const generateRequestHash = (endpoint, params) => {
+  return `${endpoint}:${JSON.stringify(params)}`;
+};
+
+/**
+ * Execute a request with deduplication
+ * @param {string} endpoint - API endpoint
+ * @param {string} method - HTTP method
+ * @param {object} data - Request body
+ * @param {FormData|null} formData - Form data for file uploads
+ * @returns {Promise} - Promise with response
+ */
+const executeRequest = async (endpoint, method, data = null, formData = null) => {
+  const fullUrl = `${API_URL}${endpoint}`;
+  const requestKey = generateRequestHash(fullUrl, data || formData);
+  
+  // Check if an identical request was recently made
+  if (recentRequests.has(requestKey)) {
+    console.log(`Returning cached response for ${endpoint}`);
+    return recentRequests.get(requestKey);
+  }
+  
+  // Check if same request is in flight - return the existing promise
+  if (pendingRequests.has(requestKey)) {
+    console.log(`Request to ${endpoint} already in progress, reusing promise`);
+    return pendingRequests.get(requestKey);
+  }
+  
+  // Prepare request options
+  const options = {
+    method,
+    headers: formData ? {} : { 'Content-Type': 'application/json' },
+    body: formData || (data ? JSON.stringify(data) : undefined),
+  };
+  
+  // Add X-Request-ID header for idempotency
+  options.headers = {
+    ...options.headers, 
+    'X-Request-ID': `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  };
+
+  // Create the request promise
+  const requestPromise = (async () => {
+    try {
+      console.log(`Executing request to ${endpoint}`);
+      const response = await fetch(fullUrl, options);
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      // Cache the result briefly to prevent duplicates
+      recentRequests.set(requestKey, result);
+      setTimeout(() => recentRequests.delete(requestKey), CACHE_EXPIRATION);
+      
+      return result;
+    } finally {
+      // Remove from pending requests when done
+      pendingRequests.delete(requestKey);
+    }
+  })();
+  
+  // Store the promise
+  pendingRequests.set(requestKey, requestPromise);
+  return requestPromise;
+};
+
 /**
  * Send a chat message to the backend
  * @param {string} message - User's chat message
@@ -31,12 +113,6 @@ export const sendChatMessage = async (message, conversationId = null) => {
         step_by_step: true // Ensure step-by-step is sent
       }),
     });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     console.error('API error:', error);
     throw error;
@@ -122,7 +198,7 @@ export const sendAudioMessage = async (audioBlob) => {
 
     return await response.json();
   } catch (error) {
-    console.error('API error sending audio:', error);
+    console.error('API error:', error);
     throw error;
   }
 };
@@ -176,16 +252,7 @@ export const saveAndProcessAudio = async (audioBlob) => {
     
     console.log(`Saving and processing audio file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
 
-    const response = await fetch(`${API_URL}/save-audio`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
+    return await executeRequest('/save-audio', 'POST', null, formData);
   } catch (error) {
     console.error('API error processing audio:', error);
     throw error;
@@ -212,12 +279,6 @@ export const selectFlight = async (flightIndex, conversationId) => {
         step_by_step: true // Add this flag to indicate step-by-step mode
       }),
     });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     console.error('API error:', error);
     throw error;
@@ -241,12 +302,6 @@ export const continueProcessing = async (conversationId) => {
         step_by_step: true
       }),
     });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
   } catch (error) {
     console.error('API error continuing processing:', error);
     throw error;

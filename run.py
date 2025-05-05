@@ -17,12 +17,14 @@ if missing_keys:
 if __name__ == "__main__":
     print("Starting AI Travel Planner API...")
     
-    # Use environment variable to control reload mode
-    is_dev = os.getenv("DEV_MODE", "False").lower() == "true"
+    # Get environment mode and port
+    dev_mode = os.getenv("DEV_MODE", "False").lower() in ("true", "1", "t")
+    port = int(os.getenv("PORT", "8000"))
     
-    if is_dev:
-        print("- Running in development mode with hot reload enabled")
-        uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    if dev_mode:
+        print(f"- Running in DEVELOPMENT mode with hot reload on port {port}")
+        uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True)
     else:
-        print("- Running in production mode (no hot reload)")
-        uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=False) 
+        print(f"- Running in PRODUCTION mode on port {port}")
+        # In production mode, never use reload
+        uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False) 

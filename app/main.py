@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from app.graph.trip_planner_graph import TripPlannerGraph
 from app.schemas.trip_schema import TripData
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 import tempfile
 import os
 import shutil
@@ -15,12 +15,29 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 import logging
+import asyncio
+import json
 
 # Import our pipeline functions
 from app.pipeline import process_travel_query, process_feedback, Spinner
 
 # Load environment variables from .env file (same as CLI version)
 load_dotenv()
+
+# Configure logging with a consistent format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        # Console handler without duplicates
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("app")
+
+# Prevent duplicate logs from Uvicorn
+logging.getLogger("uvicorn.access").propagate = False
+logging.getLogger("uvicorn.error").propagate = False
 
 # Import our consolidated validator
 from app.nodes.trip_validator_node import trip_validator_node, process_user_response
@@ -36,7 +53,22 @@ from app.nodes.flight_selection_node import display_flight_options, get_user_fli
 # Import our flight booking router
 from app.api.flight_booking import router as flight_booking_router
 
-app = FastAPI(title="AI Travel Planner")
+# Additional configuration for when using Gunicorn with worker processes
+# This helps prevent issues with multiple workers processing the same request
+# Gunicorn will automatically detect these settings
+worker_class = "uvicorn.workers.UvicornWorker"
+worker_connections = 1000
+keepalive = 5
+timeout = 120
+
+# Create the FastAPI app
+app = FastAPI(
+    title="AI Travel Planner",
+    description="AI-powered travel planning service",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,6 +90,9 @@ AUDIO_DIR.mkdir(exist_ok=True)
 
 # Include the flight booking router
 app.include_router(flight_booking_router)
+
+# Dictionary to store active WebSocket connections by conversation ID
+active_connections: Dict[str, Set[WebSocket]] = {}
 
 class AnalyzeInputRequest(BaseModel):
     """Request model for analyzing user input."""
@@ -92,7 +127,6 @@ async def handle_interaction(request: ChatRequest):
     """
     try:
         # Setup a proper logger
-        logger = logging.getLogger("app.interaction")
         logger.info(f"Received interaction: {request.dict()}")
         
         # Initialize or get conversation state
@@ -100,11 +134,18 @@ async def handle_interaction(request: ChatRequest):
         if not request.conversation_id:
             request.conversation_id = str(uuid.uuid4())
             
+        # Send processing update via WebSocket
+        await broadcast_update(
+            request.conversation_id,
+            "processing_started",
+            {"message": "Processing your request..."}
+        )
+            
         # Handle different types of interactions
         if request.interaction_type == "flight_selection":
-            return await handle_flight_interaction(request, state)
+            result = await handle_flight_interaction(request, state)
         elif request.interaction_type == "feedback":
-            return await handle_feedback_interaction(request, state)
+            result = await handle_feedback_interaction(request, state)
         else:  # Default to chat interaction
             if not request.message:
                 return InteractionResponse(
@@ -113,13 +154,34 @@ async def handle_interaction(request: ChatRequest):
                     message="Message cannot be empty",
                     error="No message provided"
                 )
-            return await handle_chat_interaction(request, state)
+            result = await handle_chat_interaction(request, state)
+            
+        # Send completion update via WebSocket
+        await broadcast_update(
+            request.conversation_id,
+            "processing_complete",
+            {
+                "success": result.success,
+                "interaction_type": result.interaction_type,
+                "has_data": result.data is not None
+            }
+        )
+            
+        return result
             
     except Exception as e:
-        logger = logging.getLogger("app.interaction")
         logger.error(f"Error in handle_interaction: {str(e)}")
         import traceback
         traceback.print_exc()
+        
+        # Send error update via WebSocket
+        if request.conversation_id:
+            await broadcast_update(
+                request.conversation_id,
+                "processing_error",
+                {"error": str(e)}
+            )
+            
         return InteractionResponse(
             conversation_id=request.conversation_id,
             success=False,
@@ -129,7 +191,7 @@ async def handle_interaction(request: ChatRequest):
 
 async def handle_chat_interaction(request: ChatRequest, state: Dict[str, Any]) -> InteractionResponse:
     """Handle general chat interactions."""
-    logger = logging.getLogger("app.chat")
+    logger.info(f"Processing chat message: '{request.message}'")
     try:
         # Process the chat message
         state["query"] = request.message
@@ -1213,8 +1275,94 @@ async def continue_processing(request: ChatRequest):
             error=str(e)
         )
 
+@app.websocket("/ws/{conversation_id}")
+async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
+    """
+    WebSocket endpoint for real-time trip planning updates.
+    
+    Instead of making multiple HTTP requests, clients can subscribe to trip planning
+    progress through this WebSocket connection to get real-time updates.
+    """
+    # Accept the WebSocket connection
+    await websocket.accept()
+    
+    # Register the connection
+    if conversation_id not in active_connections:
+        active_connections[conversation_id] = set()
+    active_connections[conversation_id].add(websocket)
+    
+    logger.info(f"WebSocket connection established for conversation: {conversation_id}")
+    
+    try:
+        # Send initial state if it exists
+        if conversation_id in conversation_states:
+            await websocket.send_json({
+                "type": "state_update",
+                "data": {
+                    "state": "current",
+                    "planning_complete": conversation_states[conversation_id].get("planning_complete", False),
+                    "awaiting_flight_selection": conversation_states[conversation_id].get("awaiting_flight_selection", False),
+                    "itinerary": conversation_states[conversation_id].get("itinerary", None) is not None
+                }
+            })
+        
+        # Listen for messages from the client
+        async for message in websocket.iter_json():
+            if message.get("type") == "ping":
+                # Respond to ping messages to keep the connection alive
+                await websocket.send_json({"type": "pong", "timestamp": time.time()})
+            elif message.get("type") == "request_state":
+                # Client is requesting current state
+                if conversation_id in conversation_states:
+                    await websocket.send_json({
+                        "type": "state_update",
+                        "data": {
+                            "state": "current",
+                            "planning_complete": conversation_states[conversation_id].get("planning_complete", False),
+                            "awaiting_flight_selection": conversation_states[conversation_id].get("awaiting_flight_selection", False),
+                            "itinerary": conversation_states[conversation_id].get("itinerary", None) is not None
+                        }
+                    })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket connection closed for conversation: {conversation_id}")
+    except Exception as e:
+        logger.error(f"Error in WebSocket connection: {str(e)}")
+    finally:
+        # Remove the connection when it's closed
+        if conversation_id in active_connections:
+            active_connections[conversation_id].discard(websocket)
+            if not active_connections[conversation_id]:
+                del active_connections[conversation_id]
+
+# Helper function to broadcast updates to all connected WebSocket clients for a conversation
+async def broadcast_update(conversation_id: str, update_type: str, data: Dict[str, Any]):
+    """Send an update to all WebSocket connections for a specific conversation."""
+    if conversation_id in active_connections:
+        connections = active_connections[conversation_id]
+        dead_connections = set()
+        
+        for connection in connections:
+            try:
+                await connection.send_json({
+                    "type": update_type,
+                    "data": data
+                })
+            except Exception:
+                # Mark connection for removal if it's dead
+                dead_connections.add(connection)
+        
+        # Remove dead connections
+        for dead in dead_connections:
+            connections.discard(dead)
+
 if __name__ == "__main__":
     import uvicorn
+    import os
+    
+    # Get environment mode
+    dev_mode = os.getenv("DEV_MODE", "False").lower() in ("true", "1", "t")
+    port = int(os.getenv("PORT", "8000"))
+    
     print("\n✨ Starting AI Travel Planner API Server ✨")
     
     # Check Amadeus API credentials
@@ -1231,12 +1379,10 @@ if __name__ == "__main__":
     print("- Supporting step-by-step workflow with flight selection")
     print("- Ready to process travel planning requests")
     
-    # Use environment variable to control reload mode - this is only used when running directly from this file
-    # For production, use run.py which has its own control for reload
-    is_dev = os.getenv("DEV_MODE", "False").lower() == "true"
-    if is_dev:
-        print("- Running in development mode with hot reload enabled")
-        uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    # Only use hot reload in development mode
+    if dev_mode:
+        print(f"- Running in DEVELOPMENT mode with hot reload on port {port}")
+        uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
     else:
         print("- Running in production mode")
         uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

@@ -12,6 +12,11 @@ const defaultCenter = {
   lng: -73.9855
 };
 
+// Define libraries array as a constant outside the component
+// This prevents the "LoadScript has been reloaded unintentionally" warning
+// React performance warning occurs when passing a new array on each render
+const GOOGLE_MAPS_LIBRARIES = ['places'];
+
 const MapView = ({ activities, day }) => {
   const [map, setMap] = useState(null);
   const [directions, setDirections] = useState(null);
@@ -27,7 +32,7 @@ const MapView = ({ activities, day }) => {
   const loaderOptions = {
     id: 'google-map-script',
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: ['places']  // ✅ remove 'directions'
+    libraries: GOOGLE_MAPS_LIBRARIES  // Use the static libraries constant instead of creating a new array
   };
   
   const { isLoaded, loadError } = useJsApiLoader(loaderOptions);
@@ -38,7 +43,6 @@ const MapView = ({ activities, day }) => {
       isLoaded,
       loadError,
       activities,
-      apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
       mapCenter
     });
   }, [isLoaded, loadError, activities, mapCenter]);

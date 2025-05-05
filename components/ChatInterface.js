@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaMicrophone, FaPaperPlane, FaStop } from 'react-icons/fa';
 import { sendChatMessage, createConversation, saveAndProcessAudio, selectFlight, continueProcessing } from '../services/api';
+import tripPlannerWebSocket from '../services/websocket';
 import FlightSelection from './FlightSelection';
 
 const TypingIndicator = () => (
@@ -452,42 +453,88 @@ const ChatInterface = ({ onSendMessage }) => {
         return;
       }
       
+      // Check if feedback question exists and display it in the chat
+      if (response.feedback_question) {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: response.feedback_question,
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+      }
+      
       // Prepare response text - handle complex objects
       let responseText = "";
+      let hasItinerary = false;
+      
       if (response.response) {
         if (typeof response.response === 'string') {
-          responseText = response.response;
-        } else {
-          // It's an object, convert to readable text
+          // Try to parse JSON string responses
           try {
-            if (response.response.daily_itinerary) {
-              const dailyItinerary = response.response.daily_itinerary;
-              // Format itinerary days
-              responseText = Object.keys(dailyItinerary).map(day => {
-                const activities = dailyItinerary[day];
-                return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity}`).join('\n')}`;
-              }).join('\n\n');
-            } else if (response.response.trip_summary) {
-              // Format trip summary
-              const summary = response.response.trip_summary;
-              responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
+            const parsedResponse = JSON.parse(response.response);
+            if (parsedResponse.daily_itinerary || parsedResponse.trip_summary) {
+              // This is an itinerary - format it for the chat
+              if (parsedResponse.daily_itinerary) {
+                const dailyItinerary = parsedResponse.daily_itinerary;
+                // Format itinerary days
+                responseText = Object.keys(dailyItinerary).map(day => {
+                  const activities = dailyItinerary[day];
+                  return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity || a.title || ''}`).join('\n')}`;
+                }).join('\n\n');
+              } else if (parsedResponse.trip_summary) {
+                // Format trip summary
+                const summary = parsedResponse.trip_summary;
+                responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
+              }
+              hasItinerary = true;
             } else {
-              // Fall back to JSON.stringify with formatting
-              responseText = JSON.stringify(response.response, null, 2);
+              // Just a regular JSON response
+              responseText = JSON.stringify(parsedResponse, null, 2);
             }
-          } catch (error) {
-            // If we can't process it nicely, fall back to simple stringify
-            responseText = JSON.stringify(response.response);
+          } catch (e) {
+            // Not valid JSON, use as-is
+            responseText = response.response;
+          }
+        } else {
+          // It's already an object
+          if (response.response.daily_itinerary) {
+            const dailyItinerary = response.response.daily_itinerary;
+            // Format itinerary days
+            responseText = Object.keys(dailyItinerary).map(day => {
+              const activities = Array.isArray(dailyItinerary[day]) 
+                ? dailyItinerary[day] 
+                : dailyItinerary[day].activities || [];
+              
+              return `Day ${day}:\n${activities.map(a => `- ${a.time || ''} ${a.activity || a.title || ''}`).join('\n')}`;
+            }).join('\n\n');
+            hasItinerary = true;
+          } else if (response.response.trip_summary) {
+            // Format trip summary
+            const summary = response.response.trip_summary;
+            responseText = `Trip to ${summary.destination} from ${summary.start_date} to ${summary.end_date}`;
+            hasItinerary = true;
+          } else {
+            // Fall back to JSON.stringify with formatting
+            responseText = JSON.stringify(response.response, null, 2);
           }
         }
       } else if (response.itinerary) {
         responseText = typeof response.itinerary === 'string' 
           ? response.itinerary 
           : JSON.stringify(response.itinerary);
+        hasItinerary = true;
       } else if (response.error) {
         responseText = `Error: ${response.error}`;
       } else if (response.message) {
         responseText = response.message;
+      } else if (response.result) {
+        // Handle 'result' field which might contain the itinerary
+        if (typeof response.result === 'string') {
+          responseText = response.result;
+        } else {
+          responseText = JSON.stringify(response.result, null, 2);
+        }
+        hasItinerary = true;
       } else {
         responseText = "I couldn't process that request. Can you try again?";
       }
@@ -497,7 +544,8 @@ const ChatInterface = ({ onSendMessage }) => {
         id: Date.now() + 1,
         text: responseText,
         sender: 'ai',
-        timestamp: new Date()
+        timestamp: new Date(),
+        hasItinerary: hasItinerary
       };
       
       setMessages(prev => [...prev, aiResponse]);

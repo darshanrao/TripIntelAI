@@ -47,10 +47,40 @@ GOOGLE_PLACES_API_KEY=your_google_places_api_key
 
 ## Running the Application
 
-Run the application with:
+### Development Mode
+
+Run the application in development mode with hot reload:
+```bash
+DEV_MODE=true python run.py
+```
+
+### Production Mode
+
+Run the application in production mode:
 ```bash
 python run.py
 ```
+
+For production deployments with multiple workers, use Gunicorn:
+```bash
+gunicorn -c gunicorn_conf.py app.main:app
+```
+
+### Preventing Duplicate Processing
+
+If you experience duplicate request processing or database connections, try the following:
+
+1. **Set DEV_MODE correctly**:
+   - Use `DEV_MODE=true` only during development
+   - In production, make sure `DEV_MODE` is not set or explicitly set to `false`
+
+2. **Use Gunicorn with proper worker configuration**:
+   - The included `gunicorn_conf.py` has optimal settings
+   - Adjust worker count based on your server's CPU cores
+
+3. **Monitor request processing**:
+   - Check logs for duplicate processing patterns
+   - Use tools like New Relic or Prometheus to monitor request processing times
 
 The API will be available at `http://localhost:8000`.
 
