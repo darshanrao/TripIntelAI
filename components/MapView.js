@@ -23,15 +23,35 @@ const MapView = ({ activities, day }) => {
   const [mapCenter, setMapCenter] = useState(defaultCenter);
   const [isLoading, setIsLoading] = useState(true);
   const [markers, setMarkers] = useState([]);
+  const [mapApiKey, setMapApiKey] = useState('');
   const directionsServiceRef = useRef(null);
   const directionsRendererRef = useRef(null);
 
-  // Load the Google Maps API
-  const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE';
+  // Load the Google Maps API key securely from an API endpoint
+  useEffect(() => {
+    async function fetchMapApiKey() {
+      try {
+        // Create an API endpoint in your Next.js app to serve the key securely
+        // Example: pages/api/map-key.js that returns the key with proper restrictions
+        const response = await fetch('/api/map-key');
+        const data = await response.json();
+        
+        if (data.key) {
+          setMapApiKey(data.key);
+        } else {
+          console.error('Map API key not available');
+        }
+      } catch (error) {
+        console.error('Error fetching map API key:', error);
+      }
+    }
+    
+    fetchMapApiKey();
+  }, []);
 
   const loaderOptions = {
     id: 'google-map-script',
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    googleMapsApiKey: mapApiKey,
     libraries: GOOGLE_MAPS_LIBRARIES  // Use the static libraries constant instead of creating a new array
   };
   

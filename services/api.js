@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const { API_URL, USE_MOCKS } = require('./config');
 
 // Keep track of in-flight requests to prevent duplicates
 const pendingRequests = new Map();
