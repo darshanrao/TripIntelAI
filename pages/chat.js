@@ -13,6 +13,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('chat');
   const [isLoading, setIsLoading] = useState(false);
   const [apiResponse, setApiResponse] = useState(null);
+  const [hoveredActivityId, setHoveredActivityId] = useState(null);
 
   useEffect(() => {
     // Check if the screen is mobile
@@ -60,8 +61,8 @@ export default function Home() {
     }
   }, [apiResponse]);
 
-  const handleChatMessage = async (message) => {
-    console.log('Message from chat:', message);
+  const handleChatMessage = async (message, options = {}) => {
+    console.log('Message from chat:', message, options);
     
     if (!message || message.trim() === '') {
       console.error('Empty message detected');
@@ -71,8 +72,8 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-      // Call the API
-      const response = await sendChatMessage(message);
+      // Call the API with options
+      const response = await sendChatMessage(message, null, options);
       console.log('API response:', response);
       
       // Store the API response
@@ -99,7 +100,7 @@ export default function Home() {
   };
 
   const processItineraryResponse = (response) => {
-    console.log("Processing itinerary response:", response);
+    console.log("Processing itinerary response:", typeof response, response);
     
     if (!response) {
       console.error('Empty response received');
@@ -107,13 +108,53 @@ export default function Home() {
     }
 
     try {
+      // Ensure response is an object, not a string
+      let data = response;
+      if (typeof response === 'string') {
+        try {
+          data = JSON.parse(response);
+          console.log("Successfully parsed string response to JSON object");
+        } catch (e) {
+          console.error("Failed to parse response string to JSON:", e);
+          // If parsing fails, try to create a minimal valid object
+          data = { error: "Invalid response format" };
+        }
+      }
+
       // Transform the data into the expected format for both views
       const processedData = {
-        trip_summary: response.trip_summary || null,
-        daily_itinerary: response.daily_itinerary || {},
-        review_highlights: response.review_highlights || null,
-        flights: response.flights || []
+        trip_summary: data.trip_summary || null,
+        daily_itinerary: data.daily_itinerary || {},
+        review_highlights: data.review_highlights || null,
+        flights: data.flights || []
       };
+      
+      // Validate the daily_itinerary structure
+      if (processedData.daily_itinerary) {
+        // Log all the day keys we found
+        const dayKeys = Object.keys(processedData.daily_itinerary);
+        console.log(`Itinerary has ${dayKeys.length} days:`, dayKeys.join(', '));
+        
+        // Ensure each day has a valid activities array
+        dayKeys.forEach(dayKey => {
+          const day = processedData.daily_itinerary[dayKey];
+          if (day) {
+            if (!day.activities) {
+              console.warn(`Creating empty activities array for ${dayKey}`);
+              day.activities = [];
+            } else if (!Array.isArray(day.activities)) {
+              console.warn(`Converting activities to array for ${dayKey}`);
+              try {
+                // If it's an object with numeric keys, convert to array
+                day.activities = Object.values(day.activities);
+              } catch (e) {
+                console.error(`Failed to convert activities for ${dayKey}:`, e);
+                day.activities = [];
+              }
+            }
+          }
+        });
+      }
       
       console.log("Processed itinerary data:", processedData);
       setItineraryData(processedData);
@@ -148,6 +189,12 @@ export default function Home() {
 
   // Get the current day's activities
   const currentDayActivities = itineraryData?.daily_itinerary[`day_${selectedDay}`]?.activities || [];
+
+  // Handle activity hover/click to center map  
+  const handleActivityHover = (id) => {
+    console.log(`Parent received activity ID: ${id}`);
+    setHoveredActivityId(id);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -218,6 +265,8 @@ export default function Home() {
             <ItineraryView 
               itineraryData={itineraryData}
               apiResponse={apiResponse}
+              onDayChange={(day) => setSelectedDay(day)}
+              onActivityHover={handleActivityHover}
               key="itinerary-view"
             />
           ) : (
@@ -237,6 +286,10 @@ export default function Home() {
           <MapView 
             activities={currentDayActivities}
             selectedDay={selectedDay}
+            itineraryData={itineraryData}
+            key="map-view"
+            calculateRoutes={false}
+            hoveredActivityId={hoveredActivityId}
           />
         </motion.div>
       </div>

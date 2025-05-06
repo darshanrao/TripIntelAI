@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaMicrophone, FaPaperPlane, FaStop } from 'react-icons/fa';
-import { sendChatMessage, createConversation, saveAndProcessAudio, selectFlight, continueProcessing } from '../services/api';
+import { sendChatMessage, createConversation, saveAndProcessAudio, selectFlight, continueProcessing, searchFlights } from '../services/api';
 import tripPlannerWebSocket from '../services/websocket';
 import FlightSelection from './FlightSelection';
 
@@ -53,6 +54,8 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [flightOptions, setFlightOptions] = useState(null);
+  const [isFirstUserMessage, setIsFirstUserMessage] = useState(true);
+  const [isSearchingFlights, setIsSearchingFlights] = useState(false);
   const messageEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   
@@ -209,50 +212,131 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
         try {
           // Send the audio to the backend
           setIsTyping(true);
-          const response = await saveAndProcessAudio(audioBlob);
           
-          // Remove the processing message
-          setMessages(prev => prev.filter(msg => !msg.isTemporary));
-          
-          // Handle the response from the new endpoint
-          console.log('Audio processing response:', response);
-          
-          if (response.success) {
-            // Add the transcription message
-            if (response.transcript) {
+          // Check if this is the first user message
+          const firstMessage = isFirstUserMessage;
+          if (isFirstUserMessage) {
+            setIsFirstUserMessage(false);
+            
+            // Process the audio first to get the transcript
+            const transcriptResponse = await saveAndProcessAudio(audioBlob);
+            
+            // Remove the processing message
+            setMessages(prev => prev.filter(msg => !msg.isTemporary));
+            
+            if (!transcriptResponse.success || !transcriptResponse.transcript) {
               setMessages(prev => [...prev, {
-                id: Date.now(),
-                text: `I heard: "${response.transcript}"`,
+                id: Date.now() + 1,
+                text: "I couldn't understand your audio. Please try speaking clearly or typing your message.",
+                sender: 'ai',
+                timestamp: new Date()
+              }]);
+              setIsTyping(false);
+              return;
+            }
+            
+            // Display what we heard
+            setMessages(prev => [...prev, {
+              id: Date.now(),
+              text: `I heard: "${transcriptResponse.transcript}"`,
+              sender: 'ai',
+              timestamp: new Date(),
+              isTranscript: true
+            }]);
+            
+            // For the first message, initiate flight search process
+            try {
+              // Add flight search message
+              setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: "Searching for flight options based on your request...",
+                sender: 'ai',
+                timestamp: new Date()
+              }]);
+              
+              setIsSearchingFlights(true);
+              
+              // First call the dedicated flight search endpoint
+              const searchResponse = await searchFlights(transcriptResponse.transcript, conversationId);
+              console.log("Flight search response:", searchResponse);
+              
+              if (searchResponse.error) {
+                setMessages(prev => [...prev, {
+                  id: Date.now() + 2,
+                  text: `Error searching flights: ${searchResponse.error}`,
+                  sender: 'ai',
+                  timestamp: new Date()
+                }]);
+                setIsTyping(false);
+                setIsSearchingFlights(false);
+                return;
+              }
+              
+              // Now send the regular message to get flight options
+              if (onSendMessage && typeof onSendMessage === 'function') {
+                onSendMessage(transcriptResponse.transcript, { 
+                  requestFlightOptions: true,
+                  searchResults: searchResponse.search_id || searchResponse.id
+                });
+              }
+            } catch (error) {
+              console.error("Error during flight search:", error);
+              setMessages(prev => [...prev, {
+                id: Date.now() + 2,
+                text: `Error searching flights: ${error.message}. Please try again with more specific details.`,
+                sender: 'ai',
+                timestamp: new Date()
+              }]);
+              setIsTyping(false);
+              setIsSearchingFlights(false);
+            }
+          } else {
+            // Not the first message, process audio normally
+            const response = await saveAndProcessAudio(audioBlob);
+            
+            // Remove the processing message
+            setMessages(prev => prev.filter(msg => !msg.isTemporary));
+            
+            // Handle the response from the new endpoint
+            console.log('Audio processing response:', response);
+            
+            if (response.success) {
+              // Add the transcription message
+              if (response.transcript) {
+                setMessages(prev => [...prev, {
+                  id: Date.now(),
+                  text: `I heard: "${response.transcript}"`,
+                  sender: 'ai',
+                  timestamp: new Date(),
+                  isTranscript: true
+                }]);
+              }
+              
+              // Add AI response to chat
+              const aiResponse = {
+                id: Date.now() + 1,
+                text: response.response,
                 sender: 'ai',
                 timestamp: new Date(),
-                isTranscript: true
+                data: response.data
+              };
+              
+              setMessages(prev => [...prev, aiResponse]);
+              
+              // Notify parent component with the transcript or response
+              onSendMessage(response.transcript || response.response);
+            } else {
+              // Error case
+              setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                text: response.response || "Sorry, I couldn't process your audio. Please try again.",
+                sender: 'ai',
+                timestamp: new Date()
               }]);
             }
             
-            // Add AI response to chat
-            const aiResponse = {
-              id: Date.now() + 1,
-              text: response.response,
-              sender: 'ai',
-              timestamp: new Date(),
-              data: response.data
-            };
-            
-            setMessages(prev => [...prev, aiResponse]);
-            
-            // Notify parent component with the transcript or response
-            onSendMessage(response.transcript || response.response);
-          } else {
-            // Error case
-            setMessages(prev => [...prev, {
-              id: Date.now() + 1,
-              text: response.response || "Sorry, I couldn't process your audio. Please try again.",
-              sender: 'ai',
-              timestamp: new Date()
-            }]);
+            setIsTyping(false);
           }
-          
-          setIsTyping(false);
         } catch (error) {
           console.error('Error processing voice message:', error);
           setIsTyping(false);
@@ -310,13 +394,13 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
   }, [messages]);
 
   // Handle flight selection
-  const handleFlightSelection = async (flightIndex) => {
+  const handleFlightSelection = async (flightIdOrIndex) => {
     if (!conversationId) {
       console.error('No conversation ID available');
       return;
     }
     
-    console.log(`Selected flight index: ${flightIndex}, conversation ID: ${conversationId}`);
+    console.log(`Selected flight: ${flightIdOrIndex}, conversation ID: ${conversationId}`);
     
     // Show typing indicator
     setIsTyping(true);
@@ -324,21 +408,43 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
     // Remove the flight selection cards from the chat messages
     setMessages(prev => prev.filter(msg => !msg.isFlightSelection));
 
+    // Store flight options before clearing
+    const currentFlightOptions = flightOptions;
+    
     // Clear flight options state
     setFlightOptions(null);
     
     try {
-      // Add immediate feedback message
-      setMessages(prev => [...prev, {
-        id: Date.now() - 1,
-        text: `Selected flight option ${flightIndex + 1}`,
-        sender: 'user',
-        timestamp: new Date()
-      }]);
+      // Add immediate feedback message - try to find the flight by ID first
+      let selectedFlight;
+      
+      if (typeof flightIdOrIndex === 'string' && currentFlightOptions) {
+        // If it's a string, it's the flight ID
+        selectedFlight = currentFlightOptions.find(f => f.id === flightIdOrIndex);
+      } else if (currentFlightOptions) {
+        // Otherwise it's the index
+        selectedFlight = currentFlightOptions[flightIdOrIndex];
+      }
+      
+      if (selectedFlight) {
+        setMessages(prev => [...prev, {
+          id: Date.now() - 1,
+          text: `Selected ${selectedFlight.airline} flight ${selectedFlight.flight_number} to ${selectedFlight.arrival_city}`,
+          sender: 'user',
+          timestamp: new Date()
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          id: Date.now() - 1,
+          text: `Selected flight option ${flightIdOrIndex + 1}`,
+          sender: 'user',
+          timestamp: new Date()
+        }]);
+      }
       
       // Process the selected flight using the backend
-      console.log(`Calling selectFlight with index ${flightIndex}, conversationId ${conversationId}`);
-      const flightResponse = await selectFlight(flightIndex, conversationId);
+      console.log(`Calling selectFlight with ID/index ${flightIdOrIndex}, conversationId ${conversationId}`);
+      const flightResponse = await selectFlight(flightIdOrIndex, conversationId);
       console.log("Flight selection response:", flightResponse);
       
       // Add a message about the selected flight
@@ -367,6 +473,7 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
           onSendMessage(JSON.stringify(flightResponse.data));
         }
       } else {
+        // We need to continue processing to get the final itinerary
         // Add a message indicating we're continuing
         setMessages(prev => [...prev, {
           id: Date.now() + 1, 
@@ -557,40 +664,73 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
     };
     
     setMessages(prev => [...prev, userMessage]);
+    
+    // Save current input before clearing
+    const messageToSend = inputText;
+    
+    // Clear input and show typing indicator
     setInputText('');
     setIsTyping(true);
     
-    try {
-      const response = await sendChatMessage(inputText, conversationId);
-      console.log('Chat response:', response);
-
-      const aiMessage = {
+    // Check if this is the first user message
+    const firstMessage = isFirstUserMessage;
+    if (isFirstUserMessage) {
+      setIsFirstUserMessage(false);
+      
+      // For the first message, initiate flight search process
+      try {
+        // Add flight search message
+        setMessages(prev => [...prev, {
           id: Date.now() + 1,
-        text: response.message,
+          text: "Searching for flight options based on your request...",
           sender: 'ai',
-        timestamp: new Date(),
-        data: response.data // Include the response data
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-      
-      // Handle flight options if present
-      if (response.data?.flights) {
-        setFlightOptions(response.data.flights);
+          timestamp: new Date()
+        }]);
+        
+        setIsSearchingFlights(true);
+        
+        // First call the dedicated flight search endpoint
+        const searchResponse = await searchFlights(messageToSend, conversationId);
+        console.log("Flight search response:", searchResponse);
+        
+        if (searchResponse.error) {
+          setMessages(prev => [...prev, {
+            id: Date.now() + 2,
+            text: `Error searching flights: ${searchResponse.error}`,
+            sender: 'ai',
+            timestamp: new Date()
+          }]);
+          setIsTyping(false);
+          setIsSearchingFlights(false);
+          return;
+        }
+        
+        // Now send the regular message to get flight options
+        if (onSendMessage && typeof onSendMessage === 'function') {
+          onSendMessage(messageToSend, { 
+            requestFlightOptions: true,
+            searchResults: searchResponse.search_id || searchResponse.id
+          });
+        }
+      } catch (error) {
+        console.error("Error during flight search:", error);
+        setMessages(prev => [...prev, {
+          id: Date.now() + 2,
+          text: `Error searching flights: ${error.message}. Please try again with more specific details.`,
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+        setIsTyping(false);
+        setIsSearchingFlights(false);
       }
-
-      setIsTyping(false);
-      onSendMessage(inputText);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setIsTyping(false);
-      
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        text: "Sorry, I encountered an error. Please try again.",
-        sender: 'ai',
-        timestamp: new Date()
-      }]);
+    } else {
+      // Not the first message, proceed normally
+      if (onSendMessage && typeof onSendMessage === 'function') {
+        onSendMessage(messageToSend);
+      } else {
+        console.warn('onSendMessage not provided or not a function');
+        setIsTyping(false);
+      }
     }
   };
 
@@ -611,8 +751,9 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
     
     console.log("Processing API response:", apiResponse);
     
-    // Hide typing indicator
+    // Hide typing indicator and flight search indicator
     setIsTyping(false);
+    setIsSearchingFlights(false);
     
     // Check if response is valid
     if (!apiResponse) {
@@ -627,7 +768,7 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
     
     // Check if this is a flight selection request
     if (apiResponse.interaction_type === 'flight_selection' && apiResponse.data?.flights) {
-      console.log(`Received flight options for selection`);
+      console.log(`Received flight options for selection`, apiResponse.data.flights);
       
       // Store flight options in state
       setFlightOptions(apiResponse.data.flights);
@@ -750,8 +891,22 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
 
   // Modify the message rendering in the chat container
   const renderMessage = (message) => {
+    // If this is a flight selection message, render the flight selection component
+    if (message.isFlightSelection && message.flightOptions) {
+      return (
+        <div className="w-full my-2">
+          <FlightSelection 
+            flights={message.flightOptions} 
+            onSelectFlight={handleFlightSelection}
+          />
+        </div>
+      );
+    }
+    
+    // Regular message rendering
     return (
       <motion.div
+        key={message.id}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
@@ -772,17 +927,33 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
         ref={chatContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4"
       >
-        {messages.map((message) => renderMessage(message))}
+        {messages.map((message) => (
+          <React.Fragment key={message.id}>
+            {renderMessage(message)}
+          </React.Fragment>
+        ))}
         
         {/* Typing indicator */}
-          {isTyping && (
-          <div className="flex justify-start mb-4">
-            <div className="bg-gray-100 rounded-lg px-4 py-2">
-                  <TypingIndicator />
+        {isTyping && (
+        <div className="flex justify-start mb-4">
+          <div className="bg-gray-100 rounded-lg px-4 py-2">
+                <TypingIndicator />
               </div>
             </div>
-          )}
-          
+        )}
+        
+        {/* Flight Search Loading Indicator */}
+        {isSearchingFlights && (
+        <div className="flex justify-start mb-4">
+          <div className="bg-gray-100 rounded-lg px-4 py-3">
+            <div className="flex items-center">
+              <div className="w-4 h-4 mr-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-sm">Searching for flights...</span>
+            </div>
+          </div>
+        </div>
+        )}
+        
         {/* Message end ref for auto-scrolling */}
         <div ref={messageEndRef} />
       </div>

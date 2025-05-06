@@ -14,6 +14,7 @@ export default function MockupsPage() {
   const [activeTab, setActiveTab] = useState('chat');
   const [isLoading, setIsLoading] = useState(false);
   const [apiResponse, setApiResponse] = useState(null);
+  const [hoveredActivityId, setHoveredActivityId] = useState(null);
 
   useEffect(() => {
     // Check if the screen is mobile
@@ -73,7 +74,7 @@ export default function MockupsPage() {
   }, [apiResponse]);
 
   const handleChatMessage = async (message) => {
-    console.log('Message from chat:', message);
+    console.log('Message from chat in mockups page:', message);
     
     if (!message || message.trim() === '') {
       console.error('Empty message detected');
@@ -107,7 +108,7 @@ export default function MockupsPage() {
   };
 
   const processItineraryResponse = (response) => {
-    console.log("Processing itinerary response:", response);
+    console.log("Processing itinerary response:", typeof response, response);
     
     if (!response) {
       console.error('Empty response received');
@@ -115,19 +116,65 @@ export default function MockupsPage() {
     }
 
     try {
+      // Ensure response is an object, not a string
+      let data = response;
+      if (typeof response === 'string') {
+        try {
+          data = JSON.parse(response);
+          console.log("Successfully parsed string response to JSON object");
+        } catch (e) {
+          console.error("Failed to parse response string to JSON:", e);
+          // If parsing fails, try to create a minimal valid object
+          data = { error: "Invalid response format" };
+        }
+      }
+
       // Transform the data into the expected format for both views
       const processedData = {
-        trip_summary: response.trip_summary || null,
-        daily_itinerary: response.daily_itinerary || {},
-        review_highlights: response.review_highlights || null,
-        flights: response.flights || []
+        trip_summary: data.trip_summary || null,
+        daily_itinerary: data.daily_itinerary || {},
+        review_highlights: data.review_highlights || null,
+        flights: data.flights || []
       };
+      
+      // Validate the daily_itinerary structure
+      if (processedData.daily_itinerary) {
+        // Log all the day keys we found
+        const dayKeys = Object.keys(processedData.daily_itinerary);
+        console.log(`Itinerary has ${dayKeys.length} days:`, dayKeys.join(', '));
+        
+        // Ensure each day has a valid activities array
+        dayKeys.forEach(dayKey => {
+          const day = processedData.daily_itinerary[dayKey];
+          if (day) {
+            if (!day.activities) {
+              console.warn(`Creating empty activities array for ${dayKey}`);
+              day.activities = [];
+            } else if (!Array.isArray(day.activities)) {
+              console.warn(`Converting activities to array for ${dayKey}`);
+              try {
+                // If it's an object with numeric keys, convert to array
+                day.activities = Object.values(day.activities);
+              } catch (e) {
+                console.error(`Failed to convert activities for ${dayKey}:`, e);
+                day.activities = [];
+              }
+            }
+          }
+        });
+      }
       
       console.log("Processed itinerary data:", processedData);
       setItineraryData(processedData);
     } catch (error) {
       console.error('Error processing itinerary data:', error);
     }
+  };
+
+  // Handle activity hover/click to center map
+  const handleActivityHover = (id) => {
+    console.log(`Mockups page received activity ID: ${id}`);
+    setHoveredActivityId(id);
   };
 
   return (
@@ -202,6 +249,8 @@ export default function MockupsPage() {
           <ItineraryView 
             itineraryData={itineraryData} 
             apiResponse={apiResponse}
+            onDayChange={(day) => setSelectedDay(day)}
+            onActivityHover={handleActivityHover}
           />
         </motion.div>
         
@@ -213,7 +262,14 @@ export default function MockupsPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
           >
-            <MapView apiResponse={apiResponse} />
+            <MapView 
+              apiResponse={apiResponse}
+              itineraryData={itineraryData}
+              selectedDay={selectedDay}
+              key="mockup-map-view-stable" 
+              calculateRoutes={false}
+              hoveredActivityId={hoveredActivityId}
+            />
           </motion.div>
         )}
       </div>

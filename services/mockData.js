@@ -1,5 +1,5 @@
-// Mock data service for TripIntelAI
-// This simulates backend responses for development and testing
+// Mock data for TripIntel frontend
+// This is a copy of the data from mock-backend/mockData.js formatted for ES modules
 
 // Mock itinerary data
 export const mockItineraryData = {
@@ -373,147 +373,36 @@ export const mockFlights = [
   }
 ];
 
-// Mock chat conversation data
+// Sample chat responses based on keywords
+export const chatResponses = {
+  default: "I understand you're interested in traveling. Can you tell me where you'd like to go and when?",
+  hello: "Hi there! I'm your AI travel assistant. Where would you like to go?",
+  los_angeles: "Los Angeles is a fantastic destination! Known for its sunny weather, iconic beaches, Hollywood glamour, and diverse dining scene. When are you planning to visit?",
+  la: "Los Angeles is a fantastic destination! Known for its sunny weather, iconic beaches, Hollywood glamour, and diverse dining scene. When are you planning to visit?",
+  hollywood: "Hollywood is an iconic part of Los Angeles known for the film industry, Walk of Fame, and landmarks like the Hollywood sign. Would you like to include it in your itinerary?",
+  budget: "Your total budget of $4729.13 should be sufficient for a luxury experience in Los Angeles, including accommodations at The Ritz-Carlton, dining, and attractions.",
+  flight: "I've found several flight options for your departure from Los Angeles. The United Airlines flight UA505 appears to be a good option with a morning departure time.",
+  itinerary: "I've prepared a detailed 4-day itinerary for your Los Angeles trip. It includes luxury accommodations at The Ritz-Carlton, visits to Universal Studios, Griffith Park, and the Getty Museum, as well as excellent dining options.",
+  hotel: "For your stay in Los Angeles, I've selected The Ritz-Carlton, a luxurious five-star hotel with exceptional service, elegant accommodations, and convenient access to downtown LA attractions.",
+  food: "Los Angeles has an incredible dining scene! I've included a variety of options in your itinerary, from the beloved Eastside Italian Deli to the popular Sushi Gen and the historic Philippe The Original.",
+  activity: "Los Angeles offers countless activities! Your itinerary includes Universal Studios Hollywood with its immersive Harry Potter and Nintendo areas, Griffith Park with stunning city views, Dodger Stadium for baseball fans, and the Getty Museum for art lovers."
+};
+
+// Helper function for simulating network delay
+export const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Mock chat history
 export const mockChatHistory = [
   {
     id: 1,
-    text: "Hi there! I'm your AI travel assistant. Where would you like to go?",
-    sender: 'ai',
-    timestamp: new Date('2023-11-15T10:00:00')
+    text: "Hello, I'm planning a trip to Los Angeles. Can you help me?",
+    sender: "user",
+    timestamp: new Date(Date.now() - 86400000)
   },
   {
     id: 2,
-    text: "I want to visit Los Angeles for a long weekend in June.",
-    sender: 'user',
-    timestamp: new Date('2023-11-15T10:01:00')
-  },
-  {
-    id: 3,
-    text: "Los Angeles is a fantastic destination! Known for its sunny weather, iconic beaches, Hollywood glamour, and diverse dining scene. What kind of activities are you interested in during your trip?",
-    sender: 'ai',
-    timestamp: new Date('2023-11-15T10:01:30')
-  },
-  {
-    id: 4,
-    text: "I'd like to experience the best of LA - maybe Universal Studios, some museums, good restaurants, and maybe a sports event.",
-    sender: 'user',
-    timestamp: new Date('2023-11-15T10:02:45')
-  },
-  {
-    id: 5,
-    text: "Great choices! What's your budget range for this trip?",
-    sender: 'ai',
-    timestamp: new Date('2023-11-15T10:03:15')
-  },
-  {
-    id: 6,
-    text: "I'm looking for a luxury experience, so around $5000 for the whole trip.",
-    sender: 'user',
-    timestamp: new Date('2023-11-15T10:04:00')
-  },
-  {
-    id: 7,
-    text: "I've put together an itinerary for your luxury weekend in Los Angeles that includes The Ritz-Carlton hotel, Universal Studios, The Getty, Dodger Stadium, and excellent dining options - all within your budget. Would you like to see it?",
-    sender: 'ai',
-    timestamp: new Date('2023-11-15T10:05:30')
-  },
-  {
-    id: 8,
-    text: "Yes, please show me the itinerary.",
-    sender: 'user',
-    timestamp: new Date('2023-11-15T10:06:15')
+    text: "Hi there! I'd be happy to help you plan your trip to Los Angeles. Could you tell me when you're planning to visit and how long you'll be staying?",
+    sender: "ai",
+    timestamp: new Date(Date.now() - 86390000)
   }
-];
-
-// Mock function to simulate API response latency
-export const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Mock API response generator with artificial delay
-export const getMockResponse = async (message) => {
-  // Add random delay to simulate network latency (800-2000ms)
-  await delay(800 + Math.random() * 1200);
-  
-  // Simple pattern matching to generate responses
-  if (message.toLowerCase().includes('hello') || message.toLowerCase().includes('hi')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "Hi there! I'm your AI travel assistant. Where would you like to go?" }),
-      data: null
-    };
-  }
-  
-  if (message.toLowerCase().includes('los angeles') || message.toLowerCase().includes('la')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "Los Angeles is a fantastic destination! Known for its sunny weather, iconic beaches, Hollywood glamour, and diverse dining scene. When are you planning to visit?" }),
-      data: null
-    };
-  }
-  
-  if (message.toLowerCase().includes('hollywood')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "Hollywood is an iconic part of Los Angeles known for the film industry, Walk of Fame, and landmarks like the Hollywood sign. Would you like to include it in your itinerary?" }),
-      data: null
-    };
-  }
-  
-  if (message.toLowerCase().includes('itinerary')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "I've prepared a detailed 4-day itinerary for your Los Angeles trip. It includes luxury accommodations at The Ritz-Carlton, visits to Universal Studios, Griffith Park, and the Getty Museum, as well as excellent dining options." }),
-      data: mockItineraryData
-    };
-  }
-  
-  if (message.toLowerCase().includes('budget')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "Your total budget of $4729.13 should be sufficient for a luxury experience in Los Angeles, including accommodations at The Ritz-Carlton, dining, and attractions." }),
-      data: null
-    };
-  }
-  
-  if (message.toLowerCase().includes('flight')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "I've found several flight options for your departure from Los Angeles. The United Airlines flight UA505 appears to be a good option with a morning departure time." }),
-      data: {
-        flights: mockFlights
-      }
-    };
-  }
-  
-  if (message.toLowerCase().includes('hotel') || message.toLowerCase().includes('ritz')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "For your stay in Los Angeles, I've selected The Ritz-Carlton, a luxurious five-star hotel with exceptional service, elegant accommodations, and convenient access to downtown LA attractions." }),
-      data: null
-    };
-  }
-  
-  if (message.toLowerCase().includes('food') || message.toLowerCase().includes('restaurant') || message.toLowerCase().includes('dining')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "Los Angeles has an incredible dining scene! I've included a variety of options in your itinerary, from the beloved Eastside Italian Deli to the popular Sushi Gen and the historic Philippe The Original." }),
-      data: null
-    };
-  }
-  
-  if (message.toLowerCase().includes('activity') || message.toLowerCase().includes('attraction') || 
-      message.toLowerCase().includes('universal') || message.toLowerCase().includes('getty') || 
-      message.toLowerCase().includes('dodger') || message.toLowerCase().includes('griffith')) {
-    return {
-      success: true,
-      response: JSON.stringify({ message: "Los Angeles offers countless activities! Your itinerary includes Universal Studios Hollywood with its immersive Harry Potter and Nintendo areas, Griffith Park with stunning city views, Dodger Stadium for baseball fans, and the Getty Museum for art lovers." }),
-      data: null
-    };
-  }
-  
-  // Default response
-  return {
-    success: true,
-    response: JSON.stringify({ message: "I understand you're interested in traveling. Can you tell me where you'd like to go and when?" }),
-    data: null
-  };
-}; 
+]; 

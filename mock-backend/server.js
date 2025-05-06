@@ -99,12 +99,54 @@ app.get('/conversations/:id', async (req, res) => {
   });
 });
 
-// Chat endpoint
+// Search flights endpoint
+app.post('/search-flights', async (req, res) => {
+  // Simulate processing delay
+  await delay(1500);
+  
+  const { message, conversation_id } = req.body;
+  
+  if (!message || message.trim() === '') {
+    return res.status(400).json({
+      success: false,
+      error: 'Message is required for flight search'
+    });
+  }
+  
+  console.log(`Searching flights based on message: "${message}"`);
+  
+  // Create a search ID for tracking this search
+  const searchId = uuidv4();
+  
+  // Get conversation or create a new one if not provided
+  const conversationId = conversation_id || uuidv4();
+  if (!conversations[conversationId]) {
+    conversations[conversationId] = [];
+  }
+  
+  // Add search confirmation to conversation
+  conversations[conversationId].push({
+    id: Date.now(),
+    text: JSON.stringify({ message: `Searching for flights based on your request: "${message}"` }),
+    sender: 'ai',
+    timestamp: new Date()
+  });
+  
+  // Return search ID and confirmation
+  res.status(200).json({
+    success: true,
+    message: "Flight search initiated successfully",
+    search_id: searchId,
+    conversation_id: conversationId
+  });
+});
+
+// Flight options endpoint (called after search)
 app.post('/chat', async (req, res) => {
   // Simulate processing delay
   await delay(1000);
   
-  const { message, conversation_id } = req.body;
+  const { message, conversation_id, request_flight_options, search_results_id } = req.body;
   
   if (!message || message.trim() === '') {
     return res.status(400).json({
@@ -127,6 +169,24 @@ app.post('/chat', async (req, res) => {
     sender: 'user',
     timestamp: new Date()
   });
+  
+  // Check if this is a request for flight options
+  if (request_flight_options) {
+    console.log(`Flight options requested with search ID: ${search_results_id || 'none'}`);
+    
+    // Return flight options
+    return res.status(200).json({
+      success: true,
+      conversation_id: conversationId,
+      interaction_type: 'flight_selection',
+      message: "Here are some flight options for your trip. Please select one that best suits your needs:",
+      data: {
+        flights: mockFlights
+      }
+    });
+  }
+  
+  // If not a flight options request, continue with normal chat processing
   
   // Generate a response based on message content
   const aiResponse = findResponseByKeywords(message);
@@ -152,27 +212,6 @@ app.post('/chat', async (req, res) => {
   };
   
   res.status(200).json(responseData);
-});
-
-// Search flights endpoint
-app.post('/search-flights', async (req, res) => {
-  // Simulate processing delay
-  await delay(1500);
-  
-  const { origin, destination, departure_date } = req.body;
-  
-  if (!origin || !destination) {
-    return res.status(400).json({
-      success: false,
-      error: 'Origin and destination are required'
-    });
-  }
-  
-  // Return mock flights
-  res.status(200).json({
-    success: true,
-    flights: mockFlights
-  });
 });
 
 // Generate itinerary endpoint
@@ -215,7 +254,8 @@ app.post('/select-flight', async (req, res) => {
   
   // Add a confirmation message to the conversation if conversation_id is provided
   if (conversation_id && conversations[conversation_id]) {
-    const confirmationMessage = `You selected a flight with ${selectedFlight.airline}, departing at ${new Date(selectedFlight.departure_time).toLocaleTimeString()} and arriving at ${new Date(selectedFlight.arrival_time).toLocaleTimeString()}.`;
+    const confirmationMessage = `You selected a ${selectedFlight.airline} flight (${selectedFlight.flight_number}) from ${selectedFlight.departure_city} (${selectedFlight.departure_airport}) to ${selectedFlight.arrival_city} (${selectedFlight.arrival_airport}), departing at ${new Date(selectedFlight.departure_time).toLocaleTimeString()} and arriving at ${new Date(selectedFlight.arrival_time).toLocaleTimeString()}. The total price is $${selectedFlight.price}.`;
+    
     conversations[conversation_id].push({
       id: Date.now(),
       text: JSON.stringify({ message: confirmationMessage }),
@@ -224,13 +264,35 @@ app.post('/select-flight', async (req, res) => {
     });
   }
   
+  // Update the mockItineraryData with the selected flight details
+  const updatedItinerary = { ...mockItineraryData };
+  
+  // Find a transportation activity in the itinerary and update it
+  Object.values(updatedItinerary.daily_itinerary).forEach(day => {
+    if (day.activities) {
+      day.activities.forEach(activity => {
+        if (activity.type === 'transportation' && activity.category === 'flight') {
+          activity.title = `${selectedFlight.airline} Flight ${selectedFlight.flight_number}`;
+          activity.details = {
+            ...activity.details,
+            airline: selectedFlight.airline,
+            flight_number: selectedFlight.flight_number,
+            departure_time: new Date(selectedFlight.departure_time).toLocaleTimeString(),
+            arrival_time: new Date(selectedFlight.arrival_time).toLocaleTimeString(),
+            departure_airport: selectedFlight.departure_airport,
+            arrival_airport: selectedFlight.arrival_airport,
+            price: selectedFlight.price
+          };
+        }
+      });
+    }
+  });
+  
   res.status(200).json({
     success: true,
-    response: JSON.stringify({ message: `Flight booked with ${selectedFlight.airline}` }),
-    data: {
-      flight: selectedFlight,
-      itinerary: mockItineraryData
-    }
+    interaction_type: 'feedback',
+    message: `Your flight has been selected. ${selectedFlight.airline} ${selectedFlight.flight_number} from ${selectedFlight.departure_city} to ${selectedFlight.arrival_city} for $${selectedFlight.price}.`,
+    data: updatedItinerary
   });
 });
 
@@ -288,6 +350,41 @@ app.post('/voice-input', async (req, res) => {
   });
 });
 
+// Save audio endpoint (mirrors voice-input functionality)
+app.post('/save-audio', async (req, res) => {
+  // Simulate processing delay
+  await delay(2000);
+  
+  // Check if request includes request_flight_options flag
+  const requestFlightOptions = req.body.request_flight_options === 'true';
+  
+  // Generate a random transcript
+  const transcripts = [
+    "I want to visit Tokyo for a week.",
+    "What are the best things to do in Tokyo?",
+    "Can you suggest an itinerary for Tokyo?",
+    "What's the budget I need for Tokyo?",
+    "Tell me about flights to Tokyo."
+  ];
+  
+  const transcript = transcripts[Math.floor(Math.random() * transcripts.length)];
+  
+  // Generate a response based on the transcript
+  const aiResponse = findResponseByKeywords(transcript);
+  
+  // Determine if we should include itinerary data
+  const shouldIncludeItinerary = transcript.toLowerCase().includes('itinerary') || 
+                               transcript.toLowerCase().includes('plan') || 
+                               Math.random() < 0.2; // Occasionally include itinerary randomly
+  
+  res.status(200).json({
+    success: true,
+    transcript: transcript,
+    response: aiResponse,
+    data: shouldIncludeItinerary ? mockItineraryData : null
+  });
+});
+
 // WebSocket endpoint (mock - returns success message)
 app.get('/ws/:id', (req, res) => {
   res.status(200).json({
@@ -303,10 +400,14 @@ app.listen(PORT, () => {
   console.log(`- GET  /health - Health check`);
   console.log(`- POST /conversations - Create a new conversation`);
   console.log(`- GET  /conversations/:id - Get conversation history`);
-  console.log(`- POST /chat - Send a chat message`);
-  console.log(`- POST /search-flights - Search for flights`);
-  console.log(`- POST /generate-itinerary - Generate an itinerary`);
-  console.log(`- POST /select-flight - Select a flight`);
-  console.log(`- POST /continue-processing - Continue processing`);
+  console.log(`- POST /chat - Send a chat message (handles normal chat & flight options)`);
+  console.log(`- POST /search-flights - Initiate a flight search from user message`);
+  console.log(`- POST /select-flight - Select a flight and update itinerary`);
+  console.log(`- POST /continue-processing - Continue processing after flight selection`);
   console.log(`- POST /voice-input - Process voice input`);
+  console.log(`- POST /save-audio - Save and process audio recording (same as voice-input)`);
+  console.log(`\nTo use the flight search flow:`);
+  console.log(`1. POST /search-flights - Send user message about flight search`);
+  console.log(`2. POST /chat with request_flight_options=true - Get flight options`);
+  console.log(`3. POST /select-flight - Select a flight and get updated itinerary`);
 }); 

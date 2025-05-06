@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tab } from '@headlessui/react';
 
-const ItineraryView = ({ itineraryData, apiResponse }) => {
+const ItineraryView = ({ itineraryData, apiResponse, onDayChange, onActivityHover }) => {
   const [itineraryMessages, setItineraryMessages] = useState([]);
   const [selectedDay, setSelectedDay] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [hoveredActivity, setHoveredActivity] = useState(null);
+  const [selectedActivity, setSelectedActivity] = useState(null);
   const [dataLoaded, setDataLoaded] = useState(false);
   const timelineRef = useRef(null);
   
@@ -101,6 +102,17 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
       // Cache the data to localStorage for persistence
       localStorage.setItem('cachedItineraryData', JSON.stringify(data));
       
+      // Debug the data structure to show days
+      if (data.daily_itinerary) {
+        const dayKeys = Object.keys(data.daily_itinerary).sort();
+        console.log("DAILY ITINERARY KEYS:", dayKeys);
+        console.log("DAYS IN DATA:", dayKeys.map(key => {
+          // Extract day number from the key
+          const match = key.match(/day[_\s]*(\d+)/i);
+          return match ? parseInt(match[1], 10) : null;
+        }).filter(Boolean));
+      }
+      
       // Process the data
       const messages = parseItineraryToMessages(data);
       
@@ -127,36 +139,286 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
   
   // Load mock data as a fallback
   const loadMockDataAsFallback = () => {
-    console.log("Loading mock data as fallback");
+    console.log("Loading direct mock data as fallback");
     
-    import('../services/mockData')
-      .then(module => {
-        console.log("Loaded mock data module:", module);
-        if (module.mockItineraryData) {
-          console.log("Found mockItineraryData in module");
-          try {
-            // Try with the original data first
-            const messages = parseItineraryToMessages(module.mockItineraryData);
-            
-            if (messages && messages.length > 0) {
-              console.log("Setting itinerary messages from mock data:", messages.length);
-              setItineraryMessages(messages);
-              setDataLoaded(true);
-              
-              // Cache this successful data
-              localStorage.setItem('cachedItineraryData', JSON.stringify(module.mockItineraryData));
-              return;
-            }
-          } catch (e) {
-            console.error("Error processing mock data:", e);
-          }
-        }
-      })
-      .catch(err => {
-        console.error("Failed to load mock data:", err);
-      });
-  };
+    // Use the exact mock-backend data directly instead of importing it
+    const mockBackendData = {
+      "trip_summary":{
+         "destination":"Los Angeles",
+         "start_date":"2025-06-10",
+         "end_date":"2025-06-13",
+         "duration_days":4,
+         "total_budget":4729.13
+      },
+      "daily_itinerary":{
+         "day_1":{
+            "date":"2025-06-10",
+            "activities":[
+               {
+                  "type":"accommodation",
+                  "category":"hotel",
+                  "title":"Check-in at The Ritz-Carlton, Los Angeles",
+                  "time":"15:00",
+                  "duration_minutes":60,
+                  "details":{
+                     "location":"900 West Olympic Boulevard, Los Angeles",
+                     "latitude":34.0452145,
+                     "longitude":-118.2666588
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Luxurious and elegant accommodations",
+                        "Exceptional service and attentive staff"
+                     ],
+                     "weaknesses":[
+                        "Expensive room rates and additional fees"
+                     ],
+                     "summary":"The Ritz-Carlton, Los Angeles offers a luxurious five-star experience with exceptional service, though guests should be prepared for premium pricing."
+                  }
+               },
+               {
+                  "type":"dining",
+                  "category":"dinner",
+                  "title":"Dinner at Eastside Italian Deli",
+                  "time":"19:00",
+                  "duration_minutes":90,
+                  "details":{
+                     "location":"1013 Alpine Street, Los Angeles",
+                     "latitude":34.0651255,
+                     "longitude":-118.2466235
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Authentic Italian sandwiches and food",
+                        "High-quality ingredients and meats"
+                     ],
+                     "weaknesses":[
+                        "Long lines, especially during lunch hours"
+                     ],
+                     "summary":"Eastside Italian Deli is a beloved, family-owned Italian deli known for authentic, high-quality sandwiches and imported Italian goods, despite long lines."
+                  }
+               }
+            ]
+         },
+         "day_2":{
+            "date":"2025-06-11",
+            "activities":[
+               {
+                  "type":"attraction",
+                  "category":"theme park",
+                  "title":"Visit Universal Studios Hollywood",
+                  "time":"09:00",
+                  "duration_minutes":480,
+                  "details":{
+                     "location":"100 Universal City Plaza, Universal City",
+                     "latitude":34.1419225,
+                     "longitude":-118.358411
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Harry Potter Wizarding World attracts many visitors",
+                        "Super Nintendo World is highly praised for its immersive experience"
+                     ],
+                     "weaknesses":[
+                        "High ticket prices and expensive food/merchandise",
+                        "Crowds and long wait times, especially on weekends and holidays"
+                     ],
+                     "summary":"Universal Studios Hollywood offers immersive themed areas like Wizarding World of Harry Potter and Super Nintendo World, alongside high prices and crowds during peak periods."
+                  }
+               },
+               {
+                  "type":"dining",
+                  "category":"dinner",
+                  "title":"Dinner at Sushi Gen",
+                  "time":"19:00",
+                  "duration_minutes":90,
+                  "details":{
+                     "location":"422 East 2nd Street, Los Angeles",
+                     "latitude":34.0467296,
+                     "longitude":-118.2387113
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Fresh, high-quality fish",
+                        "Excellent sashimi deluxe lunch special"
+                     ],
+                     "weaknesses":[
+                        "Long wait times, especially during peak hours",
+                        "Limited seating and crowded dining area"
+                     ],
+                     "summary":"Sushi Gen is renowned for its exceptionally fresh fish and famous sashimi deluxe lunch special at reasonable prices, despite consistently long wait times."
+                  }
+               }
+            ]
+         },
+         "day_3":{
+            "date":"2025-06-12",
+            "activities":[
+               {
+                  "type":"attraction",
+                  "category":"park",
+                  "title":"Visit Griffith Park",
+                  "time":"09:00",
+                  "duration_minutes":240,
+                  "details":{
+                     "location":"Los Angeles",
+                     "latitude":34.0536909,
+                     "longitude":-118.242766
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Breathtaking views of Los Angeles and the Hollywood Sign",
+                        "Extensive hiking trails for all skill levels"
+                     ],
+                     "weaknesses":[
+                        "Limited parking, especially on weekends and holidays",
+                        "Heavy crowds during peak times"
+                     ],
+                     "summary":"Griffith Park offers stunning city views, extensive hiking trails, and attractions like the Griffith Observatory, though visitors should arrive early to avoid parking challenges and crowds."
+                  }
+               },
+               {
+                  "type":"dining",
+                  "category":"lunch",
+                  "title":"Lunch at Philippe The Original",
+                  "time":"12:30",
+                  "duration_minutes":90,
+                  "details":{
+                     "location":"1001 North Alameda Street, Los Angeles",
+                     "latitude":34.0596738,
+                     "longitude":-118.236941
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Famous French dip sandwiches",
+                        "Historic establishment (opened in 1908)"
+                     ],
+                     "weaknesses":[
+                        "Long lines during peak hours",
+                        "Limited seating during busy times"
+                     ],
+                     "summary":"Philippe The Original is a historic Los Angeles landmark famous for inventing the French dip sandwich in 1908, despite occasional long lines."
+                  }
+               },
+               {
+                  "type":"attraction",
+                  "category":"stadium",
+                  "title":"Visit Dodger Stadium",
+                  "time":"18:00",
+                  "duration_minutes":240,
+                  "details":{
+                     "location":"1000 Vin Scully Ave, Los Angeles",
+                     "latitude":34.0736255,
+                     "longitude":-118.2398452
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Historic ballpark with iconic views of Los Angeles",
+                        "Great baseball atmosphere and experience"
+                     ],
+                     "weaknesses":[
+                        "Expensive parking ($30-35)",
+                        "Traffic congestion before and after games"
+                     ],
+                     "summary":"Dodger Stadium offers an iconic baseball experience with beautiful views, though visitors should plan for expensive parking and traffic congestion."
+                  }
+               }
+            ]
+         },
+         "day_4":{
+            "date":"2025-06-13",
+            "activities":[
+               {
+                  "type":"attraction",
+                  "category":"museum",
+                  "title":"Visit The Getty",
+                  "time":"09:00",
+                  "duration_minutes":240,
+                  "details":{
+                     "location":"1200 Getty Center Drive, Los Angeles",
+                     "latitude":34.0769513,
+                     "longitude":-118.475712
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "Stunning architecture and views",
+                        "Impressive art collection"
+                     ],
+                     "weaknesses":[
+                        "Expensive parking ($20-25)",
+                        "Crowded during peak times and weekends"
+                     ],
+                     "summary":"The Getty offers a world-class cultural experience with stunning architecture and art, though visitors should plan for parking costs and potential crowds."
+                  }
+               },
+               {
+                  "type":"dining",
+                  "category":"lunch",
+                  "title":"Lunch at Bottega Louie",
+                  "time":"13:00",
+                  "duration_minutes":90,
+                  "details":{
+                     "location":"700 South Grand Avenue, Los Angeles",
+                     "latitude":34.047143,
+                     "longitude":-118.256605
+                  },
+                  "review_insights":{
+                     "sentiment":"positive",
+                     "strengths":[
+                        "High-quality pastries and macarons",
+                        "Beautiful interior and ambiance"
+                     ],
+                     "weaknesses":[
+                        "Long wait times, especially on weekends",
+                        "Expensive prices"
+                     ],
+                     "summary":"Bottega Louie is known for its beautiful interior, photogenic desserts, and European-inspired menu, though it can be crowded with long waits and high prices."
+                  }
+               },
+               {
+                  "type":"transportation",
+                  "category":"flight",
+                  "title":"Depart Los Angeles on UA505",
+                  "time":"18:00",
+                  "duration_minutes":101,
+                  "details":{
+                     "airline":"UA",
+                     "flight_number":"UA505",
+                     "departure_time":"2025-06-13T06:00:00",
+                     "arrival_time":"2025-06-13T07:41:00"
+                  }
+               },
+               {
+                  "type":"accommodation",
+                  "category":"hotel",
+                  "title":"Check-out from The Ritz-Carlton, Los Angeles",
+                  "time":"12:00",
+                  "duration_minutes":30,
+                  "details":{
+                     "location":"900 West Olympic Boulevard, Los Angeles",
+                     "latitude":34.0452145,
+                     "longitude":-118.2666588
+                  }
+               }
+            ]
+         }
+      }
+    };
 
+    console.log("Using directly embedded mock data with all days:", Object.keys(mockBackendData.daily_itinerary).join(", "));
+    
+    // Always use the full mock data directly
+    processItineraryData(mockBackendData);
+  };
+  
   // On mount, attempt to load data from multiple sources
   useEffect(() => {
     // Try to load cached data first
@@ -174,18 +436,10 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
       }
     }
     
-    // If no cached data and no props yet, try to preload mock data
+    // If no cached data and no props yet, directly use the hardcoded data
     if (!loadedFromCache && !itineraryData && !apiResponse) {
-      console.log("No cached data or props. Attempting to preload mock data");
-      import('../services/mockData')
-        .then(module => {
-          // Check if we've already received itineraryData or apiResponse in the meantime
-          if (!itineraryMessages.length) {
-            console.log("Preloading mock data");
-            processItineraryData(module.mockItineraryData);
-          }
-        })
-        .catch(e => console.error("Error preloading mock data:", e));
+      console.log("No cached data or props. Using hardcoded mock data directly");
+      loadMockDataAsFallback();
     }
     
     // Set a flag to ensure we don't show loading indefinitely
@@ -206,7 +460,7 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
     console.log("Processing direct itineraryData prop:", itineraryData);
     processItineraryData(itineraryData);
   }, [itineraryData]);
-
+  
   // Process API response when it changes
   useEffect(() => {
     if (!apiResponse) return;
@@ -222,9 +476,9 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
       if (apiResponse.data) {
         console.log("Found apiResponse.data", apiResponse.data);
         if (apiResponse.data.itinerary) {
-          extractedData = apiResponse.data.itinerary;
+        extractedData = apiResponse.data.itinerary;
         } else if (apiResponse.data.daily_itinerary) {
-          extractedData = apiResponse.data;
+        extractedData = apiResponse.data;
         } else {
           // If data exists but doesn't have expected structure, use it directly
           extractedData = apiResponse.data;
@@ -269,51 +523,36 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
     // Enhanced validation and better logging
     if (!data) {
       console.warn('No data provided to parseItineraryToMessages');
-      return [];
+      return createDefaultMessages();
     }
     
-    // Log detailed structure to help with debugging
-    try {
-      console.log("Data structure check:", {
-        hasItinerary: !!data.itinerary,
-        hasTripSummary: !!(data.trip_summary || (data.itinerary && data.itinerary.trip_summary)),
-        hasDailyItinerary: !!(data.daily_itinerary || (data.itinerary && data.itinerary.daily_itinerary)),
-        tripSummaryKeys: data.trip_summary ? Object.keys(data.trip_summary) : 
-                         (data.itinerary && data.itinerary.trip_summary ? Object.keys(data.itinerary.trip_summary) : []),
-      });
-    } catch (e) {
-      console.error("Error inspecting data structure:", e);
+    // Ensure data is properly parsed as JSON if it's a string
+    let parsedData = data;
+    if (typeof data === 'string') {
+      try {
+        parsedData = JSON.parse(data);
+        console.log("Successfully parsed string data to JSON:", parsedData);
+      } catch (e) {
+        console.error("Failed to parse string data as JSON:", e);
+        return createDefaultMessages();
+      }
     }
     
     const messages = [];
 
     try {
       // Check if we need to unwrap the data object and handle multiple possible structures
-      let itineraryData = data;
+      let itineraryData = parsedData;
       
       // Handle different possible data structures
-      if (data.itinerary) {
-        itineraryData = data.itinerary;
-      } else if (data.data && data.data.itinerary) {
-        itineraryData = data.data.itinerary;
-      } else if (typeof data === 'string') {
-        // Try to parse string data as JSON
-        try {
-          const parsedData = JSON.parse(data);
-          if (parsedData.itinerary) {
-            itineraryData = parsedData.itinerary;
-          } else if (parsedData.trip_summary || parsedData.daily_itinerary) {
-            itineraryData = parsedData;
-          } else if (parsedData.data && parsedData.data.itinerary) {
-            itineraryData = parsedData.data.itinerary;
-          }
-        } catch (e) {
-          console.error("Failed to parse string data as JSON:", e);
-        }
-      } else if (data.response && typeof data.response === 'string') {
+      if (parsedData.itinerary) {
+        itineraryData = parsedData.itinerary;
+      } else if (parsedData.data && parsedData.data.itinerary) {
+        itineraryData = parsedData.data.itinerary;
+      } else if (parsedData.response && typeof parsedData.response === 'string') {
         // Try to parse response string as JSON
         try {
-          const parsedResponse = JSON.parse(data.response);
+          const parsedResponse = JSON.parse(parsedData.response);
           if (parsedResponse.data && parsedResponse.data.itinerary) {
             itineraryData = parsedResponse.data.itinerary;
           } else if (parsedResponse.itinerary) {
@@ -328,7 +567,56 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
       
       console.log("Processing itinerary data after unwrapping:", itineraryData);
       
-      // Add trip summary message if trip_summary exists
+      // STEP 1: Ensure we have a proper data structure with trip_summary and daily_itinerary
+      // If itineraryData is still missing the required structure, apply defaults
+      if (!itineraryData.trip_summary || !itineraryData.daily_itinerary) {
+        console.log("Required structure missing or incomplete, applying default structure");
+        
+        // Determine days from data if possible
+        const tripDuration = itineraryData.trip_summary?.duration_days || 
+                            (itineraryData.daily_itinerary ? Object.keys(itineraryData.daily_itinerary).length : 0);
+        const numDays = tripDuration > 0 ? tripDuration : 1; // Minimum 1 day
+        
+        console.log(`Creating default structure with ${numDays} days`);
+        
+        // Create default daily_itinerary with the appropriate number of days
+        const defaultDailyItinerary = {};
+        for (let i = 1; i <= numDays; i++) {
+          defaultDailyItinerary[`day_${i}`] = {
+            date: itineraryData.trip_summary?.start_date 
+                  ? new Date(new Date(itineraryData.trip_summary.start_date).getTime() + (i-1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                  : "",
+            activities: [
+              {
+                type: i === 1 ? "accommodation" : i === numDays ? "transportation" : "attraction",
+                category: i === 1 ? "hotel" : i === numDays ? "flight" : "sightseeing",
+                title: i === 1 ? "Check-in at Hotel" : 
+                       i === numDays ? "Departure" : 
+                       `Day ${i} Activity`,
+                time: i === 1 ? "15:00" : "10:00",
+                duration_minutes: 60,
+                details: {
+                  location: "Location details would appear here"
+                }
+              }
+            ]
+          };
+        }
+        
+        // Apply defaults while preserving any existing data
+        itineraryData = {
+          trip_summary: itineraryData.trip_summary || {
+            destination: "Your Destination",
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: new Date(new Date().getTime() + (numDays - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            duration_days: numDays,
+            total_budget: 1000.00
+          },
+          daily_itinerary: itineraryData.daily_itinerary || defaultDailyItinerary
+        };
+      }
+      
+      // STEP 2: Add trip summary message if trip_summary exists
       if (itineraryData.trip_summary) {
         messages.push({
           id: Date.now(),
@@ -346,112 +634,246 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
         console.warn("❌ No trip_summary found in data");
       }
 
-      // Add daily itinerary messages if daily_itinerary exists
+      // STEP 3: Process daily_itinerary
       if (itineraryData.daily_itinerary) {
-        const dayEntries = Object.entries(itineraryData.daily_itinerary);
-        console.log(`Found ${dayEntries.length} days in daily_itinerary`);
+        console.log("EXAMINING DAILY ITINERARY STRUCTURE:", itineraryData.daily_itinerary);
         
-        dayEntries.forEach(([day, dayData]) => {
-          if (!dayData || !dayData.activities) {
-            console.warn(`❌ Missing or invalid data for ${day}`);
-            return; // Skip if no data for this day
+        // Check if daily_itinerary is an array (some APIs return arrays instead of objects)
+        let dayEntries = [];
+        if (Array.isArray(itineraryData.daily_itinerary)) {
+          console.log("daily_itinerary is an array with", itineraryData.daily_itinerary.length, "items");
+          // Convert array to objects with day keys
+          itineraryData.daily_itinerary.forEach((dayData, index) => {
+            const dayNumber = index + 1;
+            dayEntries.push({
+              key: `day_${dayNumber}`,
+              value: dayData,
+              dayNumber: dayNumber
+            });
+          });
+        } else {
+          // It's an object with day keys
+          const dayKeys = Object.keys(itineraryData.daily_itinerary);
+          console.log("RAW DAY KEYS:", dayKeys.join(', '));
+          
+          // Extract day information from each key
+          dayEntries = dayKeys.map(key => {
+            let dayNumber;
+            
+            // Try various methods to extract day number
+            const dayMatch = key.match(/day[_\s]*(\d+)/i);
+            if (dayMatch && dayMatch[1]) {
+              dayNumber = parseInt(dayMatch[1], 10);
+            } else {
+              const numMatch = key.match(/\d+/);
+              if (numMatch) {
+                dayNumber = parseInt(numMatch[0], 10);
+              } else {
+                // Fallback: use alphabetical order to assign day numbers
+                dayNumber = dayKeys.indexOf(key) + 1;
+              }
+            }
+            
+            return { 
+              key: key, 
+              value: itineraryData.daily_itinerary[key],
+              dayNumber: dayNumber
+            };
+          });
+        }
+        
+        // Sort by day number so they appear in order
+        dayEntries.sort((a, b) => a.dayNumber - b.dayNumber);
+        
+        console.log("PROCESSED DAY ENTRIES:", 
+          dayEntries.map(entry => `${entry.key} (Day ${entry.dayNumber})`).join(', '));
+        
+        // STEP 4: Ensure we have the correct number of days
+        const expectedDays = itineraryData.trip_summary?.duration_days || dayEntries.length;
+        if (dayEntries.length < expectedDays) {
+          console.warn(`Missing days: Expected ${expectedDays} but found ${dayEntries.length}`);
+          
+          // Add missing days
+          for (let i = 1; i <= expectedDays; i++) {
+            if (!dayEntries.some(entry => entry.dayNumber === i)) {
+              console.log(`Adding missing day ${i}`);
+              
+              let dayDate = '';
+              try {
+                if (itineraryData.trip_summary?.start_date) {
+                  const startDate = new Date(itineraryData.trip_summary.start_date);
+                  const tempDate = new Date(startDate);
+                  tempDate.setDate(startDate.getDate() + (i - 1));
+                  dayDate = tempDate.toISOString().split('T')[0];
+                }
+              } catch (e) {
+                console.error("Error calculating date:", e);
+              }
+              
+              dayEntries.push({
+                key: `day_${i}`,
+                value: { 
+                  date: dayDate,
+                  activities: []
+                },
+                dayNumber: i
+              });
+            }
           }
           
-          // Extract day number from string like "day_1" to get 1
-          const dayNumber = parseInt(day.replace('day_', ''));
-          if (isNaN(dayNumber)) {
-            console.warn(`❌ Could not parse day number from ${day}`);
-            return;
-          }
-
-          console.log(`Processing day ${dayNumber} with ${dayData.activities.length} activities`);
+          // Re-sort after adding missing days
+          dayEntries.sort((a, b) => a.dayNumber - b.dayNumber);
+        }
+        
+        // STEP 5: Process each day entry to create messages
+        dayEntries.forEach(({ key, value, dayNumber }) => {
+          // For debugging
+          console.log(`Processing day ${dayNumber} (${key})`, value);
           
-          const activities = Array.isArray(dayData.activities) ? dayData.activities.map(activity => {
+          // Ensure activities is an array
+          let activities = [];
+          if (value && value.activities) {
+            if (Array.isArray(value.activities)) {
+              activities = value.activities;
+            } else if (typeof value.activities === 'object') {
+              // Try to convert from object to array
+              activities = Object.values(value.activities);
+            }
+          }
+          
+          console.log(`Day ${dayNumber} has ${activities.length} activities`);
+          
+          // Process activities into our standard format
+          const processedActivities = activities.map(activity => {
             if (!activity) return null;
             
+            // Ensure activity has a consistent ID
+            const activityId = activity.id || Math.random().toString(36).substr(2, 9);
+            console.log(`Processing activity: ${activity.title}, ID: ${activityId}`);
+            
             return {
-              id: Math.random().toString(36).substr(2, 9),
+              id: activityId,
               time: activity.time || '',
               title: activity.title || '',
-              category: activity.category || 'Other',
+              category: activity.category || activity.type || 'Other',
               icon: getActivityIcon(activity),
               details: {
                 location: activity.details?.location || '',
                 description: activity.details?.description || '',
                 duration: activity.duration_minutes || 0,
-                cost: activity.cost || 0
+                cost: activity.cost || 0,
+                latitude: activity.details?.latitude,
+                longitude: activity.details?.longitude
               },
-              // Include review insights data
               review_insights: activity.review_insights || null
             };
-          }).filter(Boolean) : [];
-
-          if (activities.length > 0) {
+          }).filter(Boolean);
+          
+          // Create day message - ALWAYS create it even if no activities
             messages.push({
               id: Date.now() + dayNumber,
               type: 'day',
               dayNumber: dayNumber,
-              date: dayData.date || '',
-              activities: groupActivitiesByCategory(activities)
-            });
-            console.log(`✅ Added day ${dayNumber} message with ${activities.length} activities`);
-          } else {
-            console.warn(`❌ No valid activities found for day ${dayNumber}`);
-          }
+            date: value?.date || '',
+            activities: groupActivitiesByCategory(processedActivities)
+          });
+          
+          console.log(`✅ Added day ${dayNumber} message with ${processedActivities.length} activities`);
         });
+        
+        // Log final count of day messages
+        const dayMessages = messages.filter(msg => msg.type === 'day');
+        console.log(`Total day messages created: ${dayMessages.length}, days: ${
+          dayMessages.map(msg => msg.dayNumber).join(', ')
+        }`);
       } else {
         console.warn("❌ No daily_itinerary found in data");
+        
+        // Fallback: Create days based on trip summary duration
+        const tripDuration = itineraryData.trip_summary?.duration_days;
+        const defaultDays = tripDuration && tripDuration > 0 ? tripDuration : 1; // Default to 1 day minimum
+        
+        console.log(`Creating ${defaultDays} default days based on trip duration`);
+        
+        for (let i = 1; i <= defaultDays; i++) {
+          messages.push({
+            id: Date.now() + i,
+            type: 'day',
+            dayNumber: i,
+            date: '',
+            activities: {}
+          });
+          console.log(`✅ Added default day ${i} (no activities)`);
+        }
       }
 
-      // Sort messages by day number
+      // STEP 6: Sort messages and return
       const sortedMessages = messages.sort((a, b) => {
         if (a.type === 'summary') return -1;
         if (b.type === 'summary') return 1;
         return a.dayNumber - b.dayNumber;
       });
       
+      console.log(`Generated ${sortedMessages.length} total messages`);
+      console.log(`Day messages: ${sortedMessages.filter(m => m.type === 'day').length}`);
+      console.log(`Days included: ${sortedMessages.filter(m => m.type === 'day').map(m => m.dayNumber).join(', ')}`);
+      
       if (sortedMessages.length === 0) {
-        // If no messages were generated, try to create a default message from the data
-        console.warn("No structured messages could be created from data. Attempting to create default message.");
-        
-        // Create a generic error message with information about what was in the data
-        messages.push({
-          id: Date.now(),
-          type: 'error',
-          content: "Could not parse itinerary data properly. The data might be in an unexpected format."
-        });
-        
-        // Try to add a raw summary message if possible
-        if (typeof data === 'object' && data !== null) {
-          const keys = Object.keys(data);
-          if (keys.length > 0) {
-            messages.push({
-              id: Date.now() + 1,
-              type: 'summary',
-              content: {
-                destination: 'Data available but format unknown',
-                startDate: 'Unknown',
-                endDate: 'Unknown',
-                duration: 0,
-                budget: 0
-              }
-            });
-          }
-        }
+        console.warn("No messages generated, falling back to defaults");
+        return createDefaultMessages();
       }
       
-      console.log(`Generated ${sortedMessages.length} itinerary messages`);
       return sortedMessages;
     } catch (error) {
       console.error("Error in parseItineraryToMessages:", error);
-      
-      // Add an error message to display to the user
-      return [{
-        id: Date.now(),
-        type: 'error',
-        content: "An error occurred while processing the itinerary data. Please try refreshing the page."
-      }];
+      return createDefaultMessages();
     }
+  };
+  
+  // Helper function to create default messages when data is missing or invalid
+  const createDefaultMessages = () => {
+    console.log("Creating default messages for display");
+    
+    // Create a basic single day by default
+    const defaultMessages = [
+      {
+        id: Date.now(),
+        type: 'summary',
+        content: {
+          destination: 'Default Destination',
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          duration: 1,
+          budget: 1000.00
+        }
+      },
+      {
+        id: Date.now() + 1,
+        type: 'day',
+        dayNumber: 1,
+        date: new Date().toISOString().split('T')[0],
+        activities: {
+          'Activities': [
+            {
+              id: 'default1',
+              time: '10:00',
+              title: 'Sample Activity',
+              category: 'Sightseeing',
+              icon: '🏛️',
+              details: {
+                location: 'Sample Location',
+                description: 'This is a sample activity',
+                duration: 60,
+                cost: 0
+              },
+              review_insights: null
+            }
+          ]
+        }
+      }
+    ];
+    
+    return defaultMessages;
   };
 
   // Helper function to get activity icon
@@ -541,16 +963,22 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={`rounded-lg p-4 transition-all duration-300 cursor-pointer ${
-                        hoveredActivity === activity.id 
-                          ? "bg-white shadow-md ring-1 ring-primary/20" 
-                          : "bg-gray-50 hover:bg-gray-100"
+                        selectedActivity === activity.id
+                          ? "bg-primary/10 shadow-md ring-1 ring-primary"
+                          : hoveredActivity === activity.id 
+                            ? "bg-white shadow-md ring-1 ring-primary/20" 
+                            : "bg-gray-50 hover:bg-gray-100"
                       }`}
                       style={{ 
-                        minHeight: hoveredActivity === activity.id ? '140px' : 'auto',
-                        transform: hoveredActivity === activity.id ? 'scale(1.02)' : 'scale(1)'
+                        minHeight: (hoveredActivity === activity.id || selectedActivity === activity.id) ? '140px' : 'auto',
+                        transform: (hoveredActivity === activity.id || selectedActivity === activity.id) ? 'scale(1.02)' : 'scale(1)'
                       }}
-                      onMouseEnter={() => setHoveredActivity(activity.id)}
-                      onMouseLeave={() => setHoveredActivity(null)}
+                      onMouseEnter={() => handleActivityHover(activity.id)}
+                      onMouseLeave={() => handleActivityHover(null)}
+                      onClick={() => {
+                        console.log(`Activity clicked with ID: ${activity.id}`, activity);
+                        handleActivityClick(activity.id);
+                      }}
                     >
                       <div className="flex items-center mb-2">
                         <span className="text-2xl mr-3">{activity.icon}</span>
@@ -558,6 +986,13 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
                           <h5 className="font-medium">{activity.title}</h5>
                           <p className="text-sm text-gray-600">{activity.time}</p>
                         </div>
+                        {selectedActivity === activity.id && (
+                          <div className="ml-auto">
+                            <span className="text-xs font-semibold bg-primary text-white px-2 py-1 rounded-full">
+                              Selected
+                            </span>
+                          </div>
+                        )}
                       </div>
                       {activity.details.location && (
                         <div className="ml-9 text-sm text-gray-600">
@@ -647,6 +1082,60 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
     }
   };
 
+  // Add effect to propagate day change to parent
+  useEffect(() => {
+    if (onDayChange && typeof onDayChange === 'function') {
+      onDayChange(selectedDay);
+    }
+  }, [selectedDay, onDayChange]);
+
+  // Update hover state for visual feedback
+  const handleActivityHover = (activityId) => {
+    setHoveredActivity(activityId);
+  };
+  
+  // Handle activity clicks to center map and show selection
+  const handleActivityClick = (activityId) => {
+    console.log(`Activity clicked:`, {
+      id: activityId,
+      type: typeof activityId,
+      idLength: activityId ? activityId.toString().length : 0
+    });
+    
+    // Toggle selection if clicking the same activity again
+    setSelectedActivity(prev => {
+      const newSelection = prev === activityId ? null : activityId;
+      console.log(`Selection changed from ${prev} to ${newSelection}`);
+      return newSelection;
+    });
+    
+    // If parent provided the onActivityHover callback, call it
+    if (onActivityHover && typeof onActivityHover === 'function') {
+      console.log(`Calling onActivityHover with ID: ${activityId}`);
+      onActivityHover(activityId);
+    } else {
+      console.warn('onActivityHover callback not provided or not a function');
+    }
+    
+    // Fallback: Try to directly center map using the global function
+    // This provides a more reliable communication method between components
+    setTimeout(() => {
+      try {
+        if (window.mapFunctions) {
+          // Find any available map instance
+          const mapInstanceId = Object.keys(window.mapFunctions)[0];
+          if (mapInstanceId && window.mapFunctions[mapInstanceId].centerMapOnActivity) {
+            console.log(`Directly calling centerMapOnActivity via window.mapFunctions[${mapInstanceId}]`);
+            const result = window.mapFunctions[mapInstanceId].centerMapOnActivity(activityId);
+            console.log(`Direct map centering result: ${result ? 'success' : 'failed'}`);
+          }
+        }
+      } catch (error) {
+        console.error("Error using direct map centering:", error);
+      }
+    }, 100); // Short delay to ensure the map component has time to register
+  };
+
   // Loading state
   if (isProcessing) {
     return (
@@ -669,13 +1158,280 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
           <button 
             className="mt-4 text-xs px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 transition-colors"
             onClick={() => {
-              // Attempt to load mock data directly
-              import('../services/mockData').then(module => {
-                console.log("Loaded mock data module:", module);
-                processItineraryData(module.mockItineraryData);
-              }).catch(err => {
-                console.error("Failed to load mock data:", err);
-              });
+              // Use the exact data from mock-backend directly without importing
+              const mockBackendData = {
+                "trip_summary":{
+                   "destination":"Los Angeles",
+                   "start_date":"2025-06-10",
+                   "end_date":"2025-06-13",
+                   "duration_days":4,
+                   "total_budget":4729.13
+                },
+                "daily_itinerary":{
+                   "day_1":{
+                      "date":"2025-06-10",
+                      "activities":[
+                         {
+                            "type":"accommodation",
+                            "category":"hotel",
+                            "title":"Check-in at The Ritz-Carlton, Los Angeles",
+                            "time":"15:00",
+                            "duration_minutes":60,
+                            "details":{
+                               "location":"900 West Olympic Boulevard, Los Angeles",
+                               "latitude":34.0452145,
+                               "longitude":-118.2666588
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Luxurious and elegant accommodations",
+                                  "Exceptional service and attentive staff"
+                               ],
+                               "weaknesses":[
+                                  "Expensive room rates and additional fees"
+                               ],
+                               "summary":"The Ritz-Carlton, Los Angeles offers a luxurious five-star experience with exceptional service, though guests should be prepared for premium pricing."
+                            }
+                         },
+                         {
+                            "type":"dining",
+                            "category":"dinner",
+                            "title":"Dinner at Eastside Italian Deli",
+                            "time":"19:00",
+                            "duration_minutes":90,
+                            "details":{
+                               "location":"1013 Alpine Street, Los Angeles",
+                               "latitude":34.0651255,
+                               "longitude":-118.2466235
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Authentic Italian sandwiches and food",
+                                  "High-quality ingredients and meats"
+                               ],
+                               "weaknesses":[
+                                  "Long lines, especially during lunch hours"
+                               ],
+                               "summary":"Eastside Italian Deli is a beloved, family-owned Italian deli known for authentic, high-quality sandwiches and imported Italian goods, despite long lines."
+                            }
+                         }
+                      ]
+                   },
+                   "day_2":{
+                      "date":"2025-06-11",
+                      "activities":[
+                         {
+                            "type":"attraction",
+                            "category":"theme park",
+                            "title":"Visit Universal Studios Hollywood",
+                            "time":"09:00",
+                            "duration_minutes":480,
+                            "details":{
+                               "location":"100 Universal City Plaza, Universal City",
+                               "latitude":34.1419225,
+                               "longitude":-118.358411
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Harry Potter Wizarding World attracts many visitors",
+                                  "Super Nintendo World is highly praised for its immersive experience"
+                               ],
+                               "weaknesses":[
+                                  "High ticket prices and expensive food/merchandise",
+                                  "Crowds and long wait times, especially on weekends and holidays"
+                               ],
+                               "summary":"Universal Studios Hollywood offers immersive themed areas like Wizarding World of Harry Potter and Super Nintendo World, alongside high prices and crowds during peak periods."
+                            }
+                         },
+                         {
+                            "type":"dining",
+                            "category":"dinner",
+                            "title":"Dinner at Sushi Gen",
+                            "time":"19:00",
+                            "duration_minutes":90,
+                            "details":{
+                               "location":"422 East 2nd Street, Los Angeles",
+                               "latitude":34.0467296,
+                               "longitude":-118.2387113
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Fresh, high-quality fish",
+                                  "Excellent sashimi deluxe lunch special"
+                               ],
+                               "weaknesses":[
+                                  "Long wait times, especially during peak hours",
+                                  "Limited seating and crowded dining area"
+                               ],
+                               "summary":"Sushi Gen is renowned for its exceptionally fresh fish and famous sashimi deluxe lunch special at reasonable prices, despite consistently long wait times."
+                            }
+                         }
+                      ]
+                   },
+                   "day_3":{
+                      "date":"2025-06-12",
+                      "activities":[
+                         {
+                            "type":"attraction",
+                            "category":"park",
+                            "title":"Visit Griffith Park",
+                            "time":"09:00",
+                            "duration_minutes":240,
+                            "details":{
+                               "location":"Los Angeles",
+                               "latitude":34.0536909,
+                               "longitude":-118.242766
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Breathtaking views of Los Angeles and the Hollywood Sign",
+                                  "Extensive hiking trails for all skill levels"
+                               ],
+                               "weaknesses":[
+                                  "Limited parking, especially on weekends and holidays",
+                                  "Heavy crowds during peak times"
+                               ],
+                               "summary":"Griffith Park offers stunning city views, extensive hiking trails, and attractions like the Griffith Observatory, though visitors should arrive early to avoid parking challenges and crowds."
+                            }
+                         },
+                         {
+                            "type":"dining",
+                            "category":"lunch",
+                            "title":"Lunch at Philippe The Original",
+                            "time":"12:30",
+                            "duration_minutes":90,
+                            "details":{
+                               "location":"1001 North Alameda Street, Los Angeles",
+                               "latitude":34.0596738,
+                               "longitude":-118.236941
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Famous French dip sandwiches",
+                                  "Historic establishment (opened in 1908)"
+                               ],
+                               "weaknesses":[
+                                  "Long lines during peak hours",
+                                  "Limited seating during busy times"
+                               ],
+                               "summary":"Philippe The Original is a historic Los Angeles landmark famous for inventing the French dip sandwich in 1908, despite occasional long lines."
+                            }
+                         },
+                         {
+                            "type":"attraction",
+                            "category":"stadium",
+                            "title":"Visit Dodger Stadium",
+                            "time":"18:00",
+                            "duration_minutes":240,
+                            "details":{
+                               "location":"1000 Vin Scully Ave, Los Angeles",
+                               "latitude":34.0736255,
+                               "longitude":-118.2398452
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Historic ballpark with iconic views of Los Angeles",
+                                  "Great baseball atmosphere and experience"
+                               ],
+                               "weaknesses":[
+                                  "Expensive parking ($30-35)",
+                                  "Traffic congestion before and after games"
+                               ],
+                               "summary":"Dodger Stadium offers an iconic baseball experience with beautiful views, though visitors should plan for expensive parking and traffic congestion."
+                            }
+                         }
+                      ]
+                   },
+                   "day_4":{
+                      "date":"2025-06-13",
+                      "activities":[
+                         {
+                            "type":"attraction",
+                            "category":"museum",
+                            "title":"Visit The Getty",
+                            "time":"09:00",
+                            "duration_minutes":240,
+                            "details":{
+                               "location":"1200 Getty Center Drive, Los Angeles",
+                               "latitude":34.0769513,
+                               "longitude":-118.475712
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "Stunning architecture and views",
+                                  "Impressive art collection"
+                               ],
+                               "weaknesses":[
+                                  "Expensive parking ($20-25)",
+                                  "Crowded during peak times and weekends"
+                               ],
+                               "summary":"The Getty offers a world-class cultural experience with stunning architecture and art, though visitors should plan for parking costs and potential crowds."
+                            }
+                         },
+                         {
+                            "type":"dining",
+                            "category":"lunch",
+                            "title":"Lunch at Bottega Louie",
+                            "time":"13:00",
+                            "duration_minutes":90,
+                            "details":{
+                               "location":"700 South Grand Avenue, Los Angeles",
+                               "latitude":34.047143,
+                               "longitude":-118.256605
+                            },
+                            "review_insights":{
+                               "sentiment":"positive",
+                               "strengths":[
+                                  "High-quality pastries and macarons",
+                                  "Beautiful interior and ambiance"
+                               ],
+                               "weaknesses":[
+                                  "Long wait times, especially on weekends",
+                                  "Expensive prices"
+                               ],
+                               "summary":"Bottega Louie is known for its beautiful interior, photogenic desserts, and European-inspired menu, though it can be crowded with long waits and high prices."
+                            }
+                         },
+                         {
+                            "type":"transportation",
+                            "category":"flight",
+                            "title":"Depart Los Angeles on UA505",
+                            "time":"18:00",
+                            "duration_minutes":101,
+                            "details":{
+                               "airline":"UA",
+                               "flight_number":"UA505",
+                               "departure_time":"2025-06-13T06:00:00",
+                               "arrival_time":"2025-06-13T07:41:00"
+                            }
+                         },
+                         {
+                            "type":"accommodation",
+                            "category":"hotel",
+                            "title":"Check-out from The Ritz-Carlton, Los Angeles",
+                            "time":"12:00",
+                            "duration_minutes":30,
+                            "details":{
+                               "location":"900 West Olympic Boulevard, Los Angeles",
+                               "latitude":34.0452145,
+                               "longitude":-118.2666588
+                            }
+                         }
+                      ]
+                   }
+                }
+              };
+
+              console.log("Using directly embedded mock data with days:", Object.keys(mockBackendData.daily_itinerary).join(", "));
+              processItineraryData(mockBackendData);
             }}
           >
             Load Sample Itinerary
@@ -688,6 +1444,17 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
 
   // Get days for tabs
   const days = itineraryMessages.filter(msg => msg.type === 'day');
+  console.log("Days filtered from messages:", 
+    days.map(day => `Day ${day.dayNumber}`),
+    "Total days:", days.length,
+    "Raw days data:", JSON.stringify(days.map(d => ({dayNumber: d.dayNumber, id: d.id})))
+  );
+
+  // Ensure days are sorted by dayNumber
+  days.sort((a, b) => a.dayNumber - b.dayNumber);
+  
+  // Log after sorting
+  console.log("Days after sorting:", days.map(day => `Day ${day.dayNumber}`));
 
   return (
     <div className="flex flex-col h-full bg-gray-50 max-h-full overflow-hidden">
@@ -699,9 +1466,20 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
       )}
       
       {days.length > 0 ? (
-        <Tab.Group as="div" className="flex flex-col flex-grow overflow-hidden">
+        <Tab.Group 
+          as="div" 
+          className="flex flex-col flex-grow overflow-hidden"
+          onChange={(index) => {
+            // Set selected day based on the tab index
+            const newDay = days[index]?.dayNumber || 1;
+            console.log(`Changing selected day to ${newDay}`);
+            setSelectedDay(newDay);
+          }}
+        >
           <Tab.List className="flex space-x-2 p-4 bg-white shadow-sm overflow-x-auto">
-            {days.map((day) => (
+            {days.map((day) => {
+              console.log(`Rendering tab for day ${day.dayNumber}`);
+              return (
               <Tab
                 key={day.id}
                 className={({ selected }) =>
@@ -714,15 +1492,19 @@ const ItineraryView = ({ itineraryData, apiResponse }) => {
                 Day {day.dayNumber}
                 {day.date && <span className="ml-2 opacity-75">({day.date})</span>}
               </Tab>
-            ))}
+              );
+            })}
           </Tab.List>
 
           <Tab.Panels className="flex-grow overflow-y-auto">
-            {days.map((day) => (
-              <Tab.Panel key={day.id} className="h-full overflow-y-auto p-4">
+            {days.map((day) => {
+              console.log(`Rendering panel for day ${day.dayNumber}`);
+              return (
+                <Tab.Panel key={day.id} className="h-full overflow-y-auto p-4">
                 {renderItineraryMessage(day)}
               </Tab.Panel>
-            ))}
+              );
+            })}
           </Tab.Panels>
         </Tab.Group>
       ) : (

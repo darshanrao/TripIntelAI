@@ -86,9 +86,10 @@ const executeRequest = async (endpoint, method, data = null, formData = null) =>
  * Send a chat message to the backend
  * @param {string} message - User's chat message
  * @param {string} conversationId - Optional conversation ID
+ * @param {Object} options - Additional options like requestFlightOptions
  * @returns {Promise} - Promise with the response
  */
-export const sendChatMessage = async (message, conversationId = null) => {
+export const sendChatMessage = async (message, conversationId = null, options = {}) => {
   if (!message || message.trim() === '') {
     console.error('Empty message detected in sendChatMessage');
     return { 
@@ -99,7 +100,7 @@ export const sendChatMessage = async (message, conversationId = null) => {
   }
   
   try {
-    console.log('Sending message to API:', message);
+    console.log('Sending message to API:', message, options);
     
     // Use the /chat endpoint and add step_by_step flag
     const response = await fetch(`${API_URL}/chat`, {
@@ -110,7 +111,9 @@ export const sendChatMessage = async (message, conversationId = null) => {
       body: JSON.stringify({ 
         message: message, // API expects message parameter
         conversation_id: conversationId,
-        step_by_step: true // Ensure step-by-step is sent
+        step_by_step: true, // Ensure step-by-step is sent
+        request_flight_options: options.requestFlightOptions || false, // Add flag for flight options
+        search_results_id: options.searchResults || null // Add search results ID from previous call
       }),
     });
 
@@ -242,49 +245,70 @@ export const saveTrip = async (tripData, name = null) => {
 /**
  * Send audio recording to the new save-audio endpoint
  * @param {Blob} audioBlob - Recorded audio file as Blob
+ * @param {Object} options - Additional options like requestFlightOptions
  * @returns {Promise} - Promise with the response
  */
-export const saveAndProcessAudio = async (audioBlob) => {
+export const saveAndProcessAudio = async (audioBlob, options = {}) => {
   try {
     // Create form data to send the file
     const formData = new FormData();
     
-    // Always use .mp3 extension and explicitly set content type
+    // Add audio file
+    // Always use .mp3 extension and explicitly set the content type
     const file = new File([audioBlob], 'recording.mp3', { 
       type: 'audio/mpeg' 
     });
-    
     formData.append('file', file);
     
-    console.log(`Saving and processing audio file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
+    // Add flag for flight options if needed
+    if (options.requestFlightOptions) {
+      formData.append('request_flight_options', 'true');
+    }
+    
+    console.log(`Sending audio file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`, options);
 
-    return await executeRequest('/save-audio', 'POST', null, formData);
+    const response = await fetch(`${API_URL}/save-audio`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
   } catch (error) {
-    console.error('API error processing audio:', error);
+    console.error('API error:', error);
     throw error;
   }
 };
 
 /**
  * Select a flight option from the presented choices
- * @param {number} flightIndex - Index of the selected flight
+ * @param {string|number} flightIdOrIndex - ID or index of the selected flight
  * @param {string} conversationId - Conversation ID
  * @returns {Promise} - Promise with the response containing the itinerary
  */
-export const selectFlight = async (flightIndex, conversationId) => {
+export const selectFlight = async (flightIdOrIndex, conversationId) => {
   try {
-    console.log(`Selecting flight ${flightIndex} for conversation ${conversationId}`);
+    console.log(`Selecting flight ${flightIdOrIndex} for conversation ${conversationId}`);
     
-    return await executeRequest('/chat', 'POST', { 
-      conversation_id: conversationId,
-      interaction_type: 'flight_selection',
-      selection_data: {
-        flight_index: flightIndex
+    const response = await fetch(`${API_URL}/select-flight`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      metadata: {
-        step_by_step: true
-      }
+      body: JSON.stringify({ 
+        flight_id: flightIdOrIndex, // API expects flight_id parameter
+        conversation_id: conversationId
+      }),
     });
+    
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
   } catch (error) {
     console.error('API error:', error);
     throw error;
@@ -305,6 +329,38 @@ export const continueProcessing = async (conversationId) => {
     });
   } catch (error) {
     console.error('API error continuing processing:', error);
+    throw error;
+  }
+};
+
+/**
+ * Search for flights based on user criteria
+ * @param {string} message - User's search criteria message
+ * @param {string} conversationId - Optional conversation ID
+ * @returns {Promise} - Promise with flight search results
+ */
+export const searchFlights = async (message, conversationId = null) => {
+  try {
+    console.log('Searching flights with criteria:', message);
+    
+    const response = await fetch(`${API_URL}/search-flights`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        message: message,
+        conversation_id: conversationId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Flight search API error:', error);
     throw error;
   }
 }; 

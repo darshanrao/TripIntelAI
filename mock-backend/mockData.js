@@ -305,70 +305,165 @@ const mockItineraryData = {
 
 // Mock flight data
 const mockFlights = [
+  // LAX to SFO flights
   {
-    id: "UA505",
+    id: "UA505-LAX-SFO",
     airline: "United Airlines",
     flight_number: "UA505",
     departure_airport: "LAX",
+    departure_city: "Los Angeles",
     arrival_airport: "SFO",
+    arrival_city: "San Francisco",
     departure_time: "2025-06-13T06:00:00",
     arrival_time: "2025-06-13T07:41:00",
     price: 249,
     duration_minutes: 101,
     stops: 0,
-    aircraft: "Boeing 737-900"
+    aircraft: "Boeing 737-900",
+    cabin_class: "Economy",
+    baggage_included: true
   },
   {
-    id: "AA1525",
+    id: "AA1525-LAX-SFO",
     airline: "American Airlines",
     flight_number: "AA1525",
     departure_airport: "LAX",
+    departure_city: "Los Angeles",
     arrival_airport: "SFO",
+    arrival_city: "San Francisco",
     departure_time: "2025-06-13T08:30:00",
     arrival_time: "2025-06-13T10:05:00",
     price: 189,
     duration_minutes: 95,
     stops: 0,
-    aircraft: "Airbus A321"
+    aircraft: "Airbus A321",
+    cabin_class: "Economy",
+    baggage_included: false
   },
   {
-    id: "DL675",
+    id: "DL675-LAX-SFO",
     airline: "Delta Air Lines",
     flight_number: "DL675",
     departure_airport: "LAX",
+    departure_city: "Los Angeles",
     arrival_airport: "SFO",
+    arrival_city: "San Francisco",
     departure_time: "2025-06-13T10:15:00",
     arrival_time: "2025-06-13T11:52:00",
     price: 219,
     duration_minutes: 97,
     stops: 0,
-    aircraft: "Boeing 737-800"
+    aircraft: "Boeing 737-800",
+    cabin_class: "Economy",
+    baggage_included: true
+  },
+  
+  // LAX to JFK flights
+  {
+    id: "DL424-LAX-JFK",
+    airline: "Delta Air Lines",
+    flight_number: "DL424",
+    departure_airport: "LAX",
+    departure_city: "Los Angeles",
+    arrival_airport: "JFK",
+    arrival_city: "New York",
+    departure_time: "2025-06-13T07:30:00",
+    arrival_time: "2025-06-13T16:05:00",
+    price: 459,
+    duration_minutes: 335,
+    stops: 0,
+    aircraft: "Boeing 767-300",
+    cabin_class: "Economy",
+    baggage_included: true
   },
   {
-    id: "AS1296",
-    airline: "Alaska Airlines",
-    flight_number: "AS1296",
+    id: "AA220-LAX-JFK",
+    airline: "American Airlines",
+    flight_number: "AA220",
     departure_airport: "LAX",
-    arrival_airport: "SFO",
+    departure_city: "Los Angeles",
+    arrival_airport: "JFK",
+    arrival_city: "New York",
+    departure_time: "2025-06-13T09:15:00",
+    arrival_time: "2025-06-13T17:45:00",
+    price: 399,
+    duration_minutes: 330,
+    stops: 0,
+    aircraft: "Boeing 777-300ER",
+    cabin_class: "Economy",
+    baggage_included: false
+  },
+  
+  // LAX to Tokyo flights
+  {
+    id: "NH175-LAX-HND",
+    airline: "ANA",
+    flight_number: "NH175",
+    departure_airport: "LAX",
+    departure_city: "Los Angeles",
+    arrival_airport: "HND",
+    arrival_city: "Tokyo",
+    departure_time: "2025-06-13T11:30:00",
+    arrival_time: "2025-06-14T15:25:00",
+    price: 1249,
+    duration_minutes: 775,
+    stops: 0,
+    aircraft: "Boeing 777-300ER",
+    cabin_class: "Economy",
+    baggage_included: true
+  },
+  {
+    id: "JL61-LAX-NRT",
+    airline: "Japan Airlines",
+    flight_number: "JL61",
+    departure_airport: "LAX",
+    departure_city: "Los Angeles",
+    arrival_airport: "NRT",
+    arrival_city: "Tokyo",
     departure_time: "2025-06-13T13:45:00",
-    arrival_time: "2025-06-13T15:20:00",
-    price: 179,
-    duration_minutes: 95,
+    arrival_time: "2025-06-14T17:20:00",
+    price: 1199,
+    duration_minutes: 755,
     stops: 0,
-    aircraft: "Boeing 737-900"
+    aircraft: "Boeing 787-9 Dreamliner",
+    cabin_class: "Economy",
+    baggage_included: true
+  },
+  
+  // LAX to London flights
+  {
+    id: "BA268-LAX-LHR",
+    airline: "British Airways",
+    flight_number: "BA268",
+    departure_airport: "LAX",
+    departure_city: "Los Angeles",
+    arrival_airport: "LHR",
+    arrival_city: "London",
+    departure_time: "2025-06-13T16:10:00",
+    arrival_time: "2025-06-14T10:40:00",
+    price: 899,
+    duration_minutes: 630,
+    stops: 0,
+    aircraft: "Airbus A380-800",
+    cabin_class: "Economy",
+    baggage_included: true
   },
   {
-    id: "WN1422",
-    airline: "Southwest Airlines",
-    flight_number: "WN1422",
+    id: "VS24-LAX-LHR",
+    airline: "Virgin Atlantic",
+    flight_number: "VS24",
     departure_airport: "LAX",
-    arrival_airport: "SFO",
-    departure_time: "2025-06-13T16:30:00",
-    arrival_time: "2025-06-13T18:05:00",
-    price: 159,
-    duration_minutes: 95,
+    departure_city: "Los Angeles",
+    arrival_airport: "LHR",
+    arrival_city: "London",
+    departure_time: "2025-06-13T18:05:00",
+    arrival_time: "2025-06-14T12:30:00",
+    price: 849,
+    duration_minutes: 625,
     stops: 0,
-    aircraft: "Boeing 737-700"
+    aircraft: "Boeing 787-9 Dreamliner",
+    cabin_class: "Economy",
+    baggage_included: true
   }
 ];
 

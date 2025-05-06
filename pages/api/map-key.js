@@ -32,8 +32,8 @@ export default function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  // Get the API key from environment variables (NOT prefixed with NEXT_PUBLIC_)
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  // Get the API key from environment variables - try both possible variable names
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
     // Don't expose that the key is missing, just return an error
