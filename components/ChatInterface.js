@@ -459,10 +459,10 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
       if (flightResponse.interaction_type === 'feedback' && flightResponse.data) {
         // We already have the complete itinerary, no need for continueProcessing
         
-        // Add the itinerary message
+        // Add a message informing about the itinerary update
         setMessages(prev => [...prev, {
           id: Date.now() + 1,
-          text: formatItineraryText(flightResponse.data),
+          text: "Your itinerary has been updated with your flight selection.",
           sender: 'ai',
           timestamp: new Date(),
           hasItinerary: true
@@ -493,10 +493,10 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
         
         // Check if we got a valid itinerary data
         if (finalResponse.data?.itinerary || finalResponse.data?.daily_itinerary) {
-          // Format and add the itinerary to chat
+          // Add a message about the itinerary update
           setMessages(prev => [...prev, {
             id: Date.now() + 2,
-            text: formatItineraryText(finalResponse.data),
+            text: "Your itinerary has been generated. Check the itinerary view for details.",
             sender: 'ai',
             timestamp: new Date(),
             hasItinerary: true
@@ -827,17 +827,19 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
       // Get the itinerary data from the correct location
       const itineraryData = apiResponse.data?.itinerary || {};
       
-      // Format the complete message with itinerary details
-      const completeText = `${feedbackText}\n\n${formatItineraryText(itineraryData)}`;
-      
-      // Add as a single message
+      // Add just the feedback message, not the itinerary details
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: completeText,
+        text: feedbackText,
         sender: 'ai',
         timestamp: new Date(),
         hasItinerary: true
       }]);
+      
+      // Notify parent component with the itinerary data
+      if (onSendMessage && typeof onSendMessage === 'function') {
+        onSendMessage(JSON.stringify(itineraryData));
+      }
       
       // Early return to prevent duplicate messages
       return;
@@ -900,6 +902,26 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
             onSelectFlight={handleFlightSelection}
           />
         </div>
+      );
+    }
+    
+    // Skip rendering itinerary content in the chat
+    if (message.hasItinerary) {
+      return (
+        <motion.div
+          key={message.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
+        >
+          <div className={`rounded-lg px-4 py-2 max-w-[80%] ${
+            message.sender === 'user' ? 'bg-primary text-white' : 'bg-gray-100'
+          }`}>
+            <div className="text-sm whitespace-pre-wrap">
+              Your itinerary has been updated. Check the itinerary view to see the details.
+            </div>
+          </div>
+        </motion.div>
       );
     }
     
