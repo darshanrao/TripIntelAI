@@ -99,48 +99,6 @@ app.get('/conversations/:id', async (req, res) => {
   });
 });
 
-// Search flights endpoint
-app.post('/search-flights', async (req, res) => {
-  // Simulate processing delay
-  await delay(1500);
-  
-  const { message, conversation_id } = req.body;
-  
-  if (!message || message.trim() === '') {
-    return res.status(400).json({
-      success: false,
-      error: 'Message is required for flight search'
-    });
-  }
-  
-  console.log(`Searching flights based on message: "${message}"`);
-  
-  // Create a search ID for tracking this search
-  const searchId = uuidv4();
-  
-  // Get conversation or create a new one if not provided
-  const conversationId = conversation_id || uuidv4();
-  if (!conversations[conversationId]) {
-    conversations[conversationId] = [];
-  }
-  
-  // Add search confirmation to conversation
-  conversations[conversationId].push({
-    id: Date.now(),
-    text: JSON.stringify({ message: `Searching for flights based on your request: "${message}"` }),
-    sender: 'ai',
-    timestamp: new Date()
-  });
-  
-  // Return search ID and confirmation
-  res.status(200).json({
-    success: true,
-    message: "Flight search initiated successfully",
-    search_id: searchId,
-    conversation_id: conversationId
-  });
-});
-
 // Flight options endpoint (called after search)
 app.post('/chat', async (req, res) => {
   // Simulate processing delay
@@ -214,142 +172,6 @@ app.post('/chat', async (req, res) => {
   res.status(200).json(responseData);
 });
 
-// Generate itinerary endpoint
-app.post('/generate-itinerary', async (req, res) => {
-  // Simulate processing delay
-  await delay(2000);
-  
-  const { destination, start_date, end_date, preferences } = req.body;
-  
-  if (!destination) {
-    return res.status(400).json({
-      success: false,
-      error: 'Destination is required'
-    });
-  }
-  
-  // Return mock itinerary data
-  res.status(200).json({
-    success: true,
-    itinerary: mockItineraryData
-  });
-});
-
-// Select flight endpoint
-app.post('/select-flight', async (req, res) => {
-  // Simulate processing delay
-  await delay(1000);
-  
-  const { flight_id, conversation_id } = req.body;
-  
-  if (!flight_id) {
-    return res.status(400).json({
-      success: false,
-      error: 'Flight ID is required'
-    });
-  }
-  
-  // Find the selected flight
-  const selectedFlight = mockFlights.find(flight => flight.id === flight_id) || mockFlights[0];
-  
-  // Add a confirmation message to the conversation if conversation_id is provided
-  if (conversation_id && conversations[conversation_id]) {
-    const confirmationMessage = `You selected a ${selectedFlight.airline} flight (${selectedFlight.flight_number}) from ${selectedFlight.departure_city} (${selectedFlight.departure_airport}) to ${selectedFlight.arrival_city} (${selectedFlight.arrival_airport}), departing at ${new Date(selectedFlight.departure_time).toLocaleTimeString()} and arriving at ${new Date(selectedFlight.arrival_time).toLocaleTimeString()}. The total price is $${selectedFlight.price}.`;
-    
-    conversations[conversation_id].push({
-      id: Date.now(),
-      text: JSON.stringify({ message: confirmationMessage }),
-      sender: 'ai',
-      timestamp: new Date()
-    });
-  }
-  
-  // Update the mockItineraryData with the selected flight details
-  const updatedItinerary = { ...mockItineraryData };
-  
-  // Find a transportation activity in the itinerary and update it
-  Object.values(updatedItinerary.daily_itinerary).forEach(day => {
-    if (day.activities) {
-      day.activities.forEach(activity => {
-        if (activity.type === 'transportation' && activity.category === 'flight') {
-          activity.title = `${selectedFlight.airline} Flight ${selectedFlight.flight_number}`;
-          activity.details = {
-            ...activity.details,
-            airline: selectedFlight.airline,
-            flight_number: selectedFlight.flight_number,
-            departure_time: new Date(selectedFlight.departure_time).toLocaleTimeString(),
-            arrival_time: new Date(selectedFlight.arrival_time).toLocaleTimeString(),
-            departure_airport: selectedFlight.departure_airport,
-            arrival_airport: selectedFlight.arrival_airport,
-            price: selectedFlight.price
-          };
-        }
-      });
-    }
-  });
-  
-  res.status(200).json({
-    success: true,
-    interaction_type: 'feedback',
-    message: `Your flight has been selected. ${selectedFlight.airline} ${selectedFlight.flight_number} from ${selectedFlight.departure_city} to ${selectedFlight.arrival_city} for $${selectedFlight.price}.`,
-    data: updatedItinerary
-  });
-});
-
-// Continue processing endpoint
-app.post('/continue-processing', async (req, res) => {
-  // Simulate processing delay
-  await delay(1500);
-  
-  const { conversation_id } = req.body;
-  
-  if (!conversation_id) {
-    return res.status(400).json({
-      success: false,
-      error: 'Conversation ID is required',
-      response: JSON.stringify({ message: 'Error: Conversation ID is required' })
-    });
-  }
-  
-  res.status(200).json({
-    success: true,
-    response: JSON.stringify({ message: "I've updated your itinerary with your flight selection." }),
-    data: mockItineraryData
-  });
-});
-
-// Voice input endpoint (mock)
-app.post('/voice-input', async (req, res) => {
-  // Simulate processing delay
-  await delay(2000);
-  
-  // Generate a random transcript
-  const transcripts = [
-    "I want to visit Tokyo for a week.",
-    "What are the best things to do in Tokyo?",
-    "Can you suggest an itinerary for Tokyo?",
-    "What's the budget I need for Tokyo?",
-    "Tell me about flights to Tokyo."
-  ];
-  
-  const transcript = transcripts[Math.floor(Math.random() * transcripts.length)];
-  
-  // Generate a response based on the transcript
-  const aiResponse = findResponseByKeywords(transcript);
-  
-  // Determine if we should include itinerary data
-  const shouldIncludeItinerary = transcript.toLowerCase().includes('itinerary') || 
-                               transcript.toLowerCase().includes('plan') || 
-                               Math.random() < 0.2; // Occasionally include itinerary randomly
-  
-  res.status(200).json({
-    success: true,
-    transcript: transcript,
-    response: aiResponse,
-    data: shouldIncludeItinerary ? mockItineraryData : null
-  });
-});
-
 // Save audio endpoint (mirrors voice-input functionality)
 app.post('/save-audio', async (req, res) => {
   // Simulate processing delay
@@ -385,11 +207,254 @@ app.post('/save-audio', async (req, res) => {
   });
 });
 
-// WebSocket endpoint (mock - returns success message)
-app.get('/ws/:id', (req, res) => {
+// NEW TRAVEL PLANNING API ENDPOINTS
+
+// 1. Initiate Travel Planning Endpoint
+app.post('/initiate-travel-planning', async (req, res) => {
+  // Simulate processing delay
+  await delay(800);
+  
+  const { destination, departure_date, return_date, num_travelers } = req.body;
+  
+  // Validate required fields
+  const missingFields = [];
+  if (!destination) missingFields.push('destination');
+  if (!departure_date) missingFields.push('departure_date');
+  if (!return_date) missingFields.push('return_date');
+  if (!num_travelers) missingFields.push('num_travelers');
+  
+  // If any fields are missing, return an error response
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required information',
+      missing_fields: missingFields,
+      message: `Please provide the following information: ${missingFields.join(', ')}`
+    });
+  }
+  
+  // All required information is present, create a planning session
+  const planningId = uuidv4();
+  
+  // Return success response
   res.status(200).json({
-    message: "WebSocket would be available here in a real implementation.",
-    note: "This mock backend only provides REST API endpoints."
+    success: true,
+    planning_id: planningId,
+    message: "Travel planning initiated successfully. Proceeding to flight search.",
+    travel_details: {
+      destination,
+      departure_date,
+      return_date,
+      num_travelers: parseInt(num_travelers)
+    },
+    next_step: "flight-search"
+  });
+});
+
+// 2. Flight Search Endpoint
+app.post('/flight-search', async (req, res) => {
+  // Simulate processing delay
+  await delay(1500);
+  
+  const { planning_id, destination, departure_date, return_date, num_travelers } = req.body;
+  
+  // Validate required fields
+  if (!planning_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Planning ID is required'
+    });
+  }
+  
+  // Check for other required parameters
+  const missingFields = [];
+  if (!destination) missingFields.push('destination');
+  if (!departure_date) missingFields.push('departure_date');
+  if (!return_date) missingFields.push('return_date');
+  if (!num_travelers) missingFields.push('num_travelers');
+  
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required information',
+      missing_fields: missingFields
+    });
+  }
+  
+  // Generate departure flights (hardcoded for testing)
+  const departureFlights = mockFlights.map((flight, index) => ({
+    ...flight,
+    id: `dep-${index}`,
+    departure_date: departure_date,
+    flight_type: 'departure'
+  }));
+  
+  // Generate return flights (hardcoded for testing)
+  const returnFlights = mockFlights.map((flight, index) => ({
+    ...flight,
+    id: `ret-${index}`,
+    departure_date: return_date,
+    flight_type: 'return',
+    // Swap departure and arrival cities for return flights
+    departure_city: flight.arrival_city,
+    arrival_city: flight.departure_city,
+    departure_airport: flight.arrival_airport,
+    arrival_airport: flight.departure_airport
+  }));
+  
+  // Return flight search results
+  res.status(200).json({
+    success: true,
+    planning_id: planning_id,
+    message: "Flight search completed successfully",
+    data: {
+      departure_flights: departureFlights,
+      return_flights: returnFlights,
+      search_parameters: {
+        destination,
+        departure_date,
+        return_date,
+        num_travelers: parseInt(num_travelers)
+      }
+    },
+    next_step: "flight-select"
+  });
+});
+
+// 3. Flight Selection Endpoint
+app.post('/flight-select', async (req, res) => {
+  // Simulate processing delay
+  await delay(1000);
+  
+  const { planning_id, departure_flight_id, return_flight_id } = req.body;
+  
+  // Validate required fields
+  if (!planning_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Planning ID is required'
+    });
+  }
+  
+  if (!departure_flight_id || !return_flight_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Both departure and return flight IDs are required',
+      missing_fields: !departure_flight_id ? ['departure_flight_id'] : ['return_flight_id']
+    });
+  }
+  
+  // Find selected flights (for a real implementation you would look these up in a database)
+  const departureFlight = mockFlights[0]; // Just use the first mock flight for testing
+  const returnFlight = { 
+    ...mockFlights[1],
+    departure_city: mockFlights[1].arrival_city,
+    arrival_city: mockFlights[1].departure_city,
+    departure_airport: mockFlights[1].arrival_airport,
+    arrival_airport: mockFlights[1].departure_airport
+  };
+  
+  // Return flight selection results
+  res.status(200).json({
+    success: true,
+    planning_id: planning_id,
+    message: "Flight selection confirmed",
+    data: {
+      selected_flights: {
+        departure: departureFlight,
+        return: returnFlight
+      },
+      total_price: (departureFlight.price + returnFlight.price).toFixed(2)
+    },
+    next_step: "generate-itinerary"
+  });
+});
+
+// 4. Generate Itinerary Endpoint
+app.post('/generate-itinerary', async (req, res) => {
+  // Simulate processing delay for itinerary generation
+  await delay(2000);
+  
+  const { planning_id, departure_flight_id, return_flight_id } = req.body;
+  
+  // Validate required fields
+  if (!planning_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Planning ID is required'
+    });
+  }
+  
+  if (!departure_flight_id || !return_flight_id) {
+    return res.status(400).json({
+      success: false,
+      error: 'Both departure and return flight IDs are required'
+    });
+  }
+  
+  // Find selected flights (for a real implementation you would look these up in a database)
+  const departureFlight = mockFlights[0]; // Just use the first mock flight for testing
+  const returnFlight = { ...mockFlights[1] };
+  
+  // Create a copy of the mock itinerary and update it with flight information
+  const itinerary = JSON.parse(JSON.stringify(mockItineraryData));
+  
+  // Add departure flight to itinerary (first day)
+  if (itinerary.daily_itinerary.day_1 && itinerary.daily_itinerary.day_1.activities) {
+    // Add as the first activity
+    itinerary.daily_itinerary.day_1.activities.unshift({
+      type: "transportation",
+      category: "flight",
+      title: `${departureFlight.airline} Flight ${departureFlight.flight_number}`,
+      time: new Date(departureFlight.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      duration_minutes: 240, // Example duration
+      details: {
+        airline: departureFlight.airline,
+        flight_number: departureFlight.flight_number,
+        departure_time: new Date(departureFlight.departure_time).toLocaleTimeString(),
+        arrival_time: new Date(departureFlight.arrival_time).toLocaleTimeString(),
+        departure_airport: departureFlight.departure_airport,
+        arrival_airport: departureFlight.arrival_airport,
+        price: departureFlight.price
+      }
+    });
+  }
+  
+  // Add return flight to itinerary (last day)
+  const lastDay = Object.keys(itinerary.daily_itinerary).pop();
+  if (itinerary.daily_itinerary[lastDay] && itinerary.daily_itinerary[lastDay].activities) {
+    // Add as the last activity
+    itinerary.daily_itinerary[lastDay].activities.push({
+      type: "transportation",
+      category: "flight",
+      title: `${returnFlight.airline} Flight ${returnFlight.flight_number}`,
+      time: new Date(returnFlight.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      duration_minutes: 240, // Example duration
+      details: {
+        airline: returnFlight.airline,
+        flight_number: returnFlight.flight_number,
+        departure_time: new Date(returnFlight.departure_time).toLocaleTimeString(),
+        arrival_time: new Date(returnFlight.arrival_time).toLocaleTimeString(),
+        departure_airport: returnFlight.arrival_airport, // Swap for return flight
+        arrival_airport: returnFlight.departure_airport, // Swap for return flight
+        price: returnFlight.price
+      }
+    });
+  }
+  
+  // Return the complete itinerary
+  res.status(200).json({
+    success: true,
+    planning_id: planning_id,
+    message: "Itinerary generated successfully",
+    data: {
+      itinerary: itinerary,
+      selected_flights: {
+        departure: departureFlight,
+        return: returnFlight
+      },
+      total_price: (departureFlight.price + returnFlight.price).toFixed(2)
+    }
   });
 });
 
@@ -400,14 +465,13 @@ app.listen(PORT, () => {
   console.log(`- GET  /health - Health check`);
   console.log(`- POST /conversations - Create a new conversation`);
   console.log(`- GET  /conversations/:id - Get conversation history`);
-  console.log(`- POST /chat - Send a chat message (handles normal chat & flight options)`);
-  console.log(`- POST /search-flights - Initiate a flight search from user message`);
-  console.log(`- POST /select-flight - Select a flight and update itinerary`);
-  console.log(`- POST /continue-processing - Continue processing after flight selection`);
-  console.log(`- POST /voice-input - Process voice input`);
-  console.log(`- POST /save-audio - Save and process audio recording (same as voice-input)`);
-  console.log(`\nTo use the flight search flow:`);
-  console.log(`1. POST /search-flights - Send user message about flight search`);
-  console.log(`2. POST /chat with request_flight_options=true - Get flight options`);
-  console.log(`3. POST /select-flight - Select a flight and get updated itinerary`);
+  console.log(`- POST /chat - Send a chat message (general purpose)`);
+  console.log(`- POST /save-audio - Process audio input`);
+  
+  // New structured travel planning API
+  console.log(`\nTravel planning API endpoints:`);
+  console.log(`- POST /initiate-travel-planning - Start travel planning session`);
+  console.log(`- POST /flight-search - Search for flights`);
+  console.log(`- POST /flight-select - Select departure and return flights`);
+  console.log(`- POST /generate-itinerary - Generate complete itinerary`);
 }); 

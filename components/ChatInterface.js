@@ -54,8 +54,11 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [flightOptions, setFlightOptions] = useState(null);
+  const [returnFlightOptions, setReturnFlightOptions] = useState(null);
+  const [selectedDepartureFlight, setSelectedDepartureFlight] = useState(null);
   const [isFirstUserMessage, setIsFirstUserMessage] = useState(true);
   const [isSearchingFlights, setIsSearchingFlights] = useState(false);
+  const [flightSelectionStep, setFlightSelectionStep] = useState('outbound');
   const messageEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   
@@ -400,24 +403,16 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
       return;
     }
     
-    console.log(`Selected flight: ${flightIdOrIndex}, conversation ID: ${conversationId}`);
-    
-    // Show typing indicator
-    setIsTyping(true);
-    
-    // Remove the flight selection cards from the chat messages
-    setMessages(prev => prev.filter(msg => !msg.isFlightSelection));
-
-    // Store flight options before clearing
-    const currentFlightOptions = flightOptions;
-    
-    // Clear flight options state
-    setFlightOptions(null);
-    
-    try {
-      // Add immediate feedback message - try to find the flight by ID first
-      let selectedFlight;
+    // Check if we're selecting an outbound or return flight
+    if (flightSelectionStep === 'outbound') {
+      // Selecting outbound flight
+      console.log(`Selected outbound flight: ${flightIdOrIndex}, conversation ID: ${conversationId}`);
       
+      // Store flight options before clearing
+      const currentFlightOptions = flightOptions;
+      
+      // Find the selected flight
+      let selectedFlight;
       if (typeof flightIdOrIndex === 'string' && currentFlightOptions) {
         // If it's a string, it's the flight ID
         selectedFlight = currentFlightOptions.find(f => f.id === flightIdOrIndex);
@@ -426,77 +421,132 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
         selectedFlight = currentFlightOptions[flightIdOrIndex];
       }
       
+      // Store the selected departure flight
+      setSelectedDepartureFlight(selectedFlight);
+      
+      // Add a message about the selected flight
       if (selectedFlight) {
         setMessages(prev => [...prev, {
           id: Date.now() - 1,
-          text: `Selected ${selectedFlight.airline} flight ${selectedFlight.flight_number} to ${selectedFlight.arrival_city}`,
+          text: `Selected ${selectedFlight.airline} flight ${selectedFlight.flight_number} to ${selectedFlight.arrival_city} for your outbound journey`,
           sender: 'user',
           timestamp: new Date()
         }]);
       } else {
         setMessages(prev => [...prev, {
           id: Date.now() - 1,
-          text: `Selected flight option ${flightIdOrIndex + 1}`,
+          text: `Selected outbound flight option ${flightIdOrIndex + 1}`,
           sender: 'user',
           timestamp: new Date()
         }]);
       }
       
-      // Process the selected flight using the backend
-      console.log(`Calling selectFlight with ID/index ${flightIdOrIndex}, conversationId ${conversationId}`);
-      const flightResponse = await selectFlight(flightIdOrIndex, conversationId);
-      console.log("Flight selection response:", flightResponse);
+      // Change to return flight selection step
+      setFlightSelectionStep('return');
       
-      // Add a message about the selected flight
+      // Remove the outbound flight selection cards from the chat messages
+      setMessages(prev => prev.filter(msg => !msg.isFlightSelection));
+      
+      // Create return flight options (in real app, these would come from the API)
+      const returnFlights = currentFlightOptions.map((flight, index) => ({
+        ...flight,
+        id: `ret-${index}`,
+        flight_type: 'return',
+        // Swap departure and arrival for return flights
+        departure_city: flight.arrival_city,
+        arrival_city: flight.departure_city,
+        departure_airport: flight.arrival_airport,
+        arrival_airport: flight.departure_airport
+      }));
+      
+      // Store return flight options
+      setReturnFlightOptions(returnFlights);
+      
+      // Show the return flight selection message and options
       setMessages(prev => [...prev, {
         id: Date.now(),
-        text: flightResponse.message || `Flight selected. Continuing with your trip planning...`,
+        text: "Now please select your return flight:",
         sender: 'ai',
         timestamp: new Date()
       }]);
       
-      // Check if we need to continue processing
-      if (flightResponse.interaction_type === 'feedback' && flightResponse.data) {
-        // We already have the complete itinerary, no need for continueProcessing
-        
-        // Add a message informing about the itinerary update
+      // Add the return flight selection UI to the chat
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        isFlightSelection: true,
+        flightOptions: returnFlights,
+        sender: 'ai',
+        timestamp: new Date()
+      }]);
+      
+    } else {
+      // Selecting return flight
+      console.log(`Selected return flight: ${flightIdOrIndex}, conversation ID: ${conversationId}`);
+      
+      // Show typing indicator
+      setIsTyping(true);
+      
+      // Remove the flight selection cards from the chat messages
+      setMessages(prev => prev.filter(msg => !msg.isFlightSelection));
+      
+      // Find the selected return flight
+      let selectedReturnFlight;
+      if (typeof flightIdOrIndex === 'string' && returnFlightOptions) {
+        // If it's a string, it's the flight ID
+        selectedReturnFlight = returnFlightOptions.find(f => f.id === flightIdOrIndex);
+      } else if (returnFlightOptions) {
+        // Otherwise it's the index
+        selectedReturnFlight = returnFlightOptions[flightIdOrIndex];
+      }
+      
+      // Add a message about the selected return flight
+      if (selectedReturnFlight) {
         setMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          text: "Your itinerary has been updated with your flight selection.",
-          sender: 'ai',
-          timestamp: new Date(),
-          hasItinerary: true
+          id: Date.now() - 1,
+          text: `Selected ${selectedReturnFlight.airline} flight ${selectedReturnFlight.flight_number} to ${selectedReturnFlight.arrival_city} for your return journey`,
+          sender: 'user',
+          timestamp: new Date()
         }]);
-        
-        // Notify parent component with the itinerary data
-        if (onSendMessage && typeof onSendMessage === 'function') {
-          onSendMessage(JSON.stringify(flightResponse.data));
-        }
       } else {
-        // We need to continue processing to get the final itinerary
-        // Add a message indicating we're continuing
         setMessages(prev => [...prev, {
-          id: Date.now() + 1, 
-          text: "Generating your complete itinerary...",
+          id: Date.now() - 1,
+          text: `Selected return flight option ${flightIdOrIndex + 1}`,
+          sender: 'user',
+          timestamp: new Date()
+        }]);
+      }
+      
+      // Clear flight options state
+      setFlightOptions(null);
+      setReturnFlightOptions(null);
+      
+      try {
+        // Process both selected flights using the backend
+        console.log(`Calling selectFlight with outbound ID ${selectedDepartureFlight?.id || 'dep-0'} and return ID ${flightIdOrIndex}, conversationId ${conversationId}`);
+        
+        // Call the API with both flight selections
+        const flightResponse = await selectFlight(flightIdOrIndex, conversationId, selectedDepartureFlight?.id || 'dep-0');
+        console.log("Flight selection response:", flightResponse);
+        
+        // Add a message about the selected flights
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: flightResponse.message || `Flights selected. Continuing with your trip planning...`,
           sender: 'ai',
-          timestamp: new Date(),
-          isTemporary: true
+          timestamp: new Date()
         }]);
         
-        // Continue processing to get the final itinerary
-        console.log(`Calling continueProcessing with conversationId ${conversationId}`);
-        const finalResponse = await continueProcessing(conversationId);
-        console.log("Final itinerary response:", finalResponse);
+        // Reset the flight selection step for next time
+        setFlightSelectionStep('outbound');
         
-        // Remove the temporary message
-        setMessages(prev => prev.filter(msg => !msg.isTemporary));
-        
-        // Check if we got a valid itinerary data
-        if (finalResponse.data?.itinerary || finalResponse.data?.daily_itinerary) {
-          // Add a message about the itinerary update
+        // Check if we need to continue processing
+        if (flightResponse.interaction_type === 'feedback' && flightResponse.data) {
+          // We already have the complete itinerary, no need for continueProcessing
+          
+          // Add the itinerary message
           setMessages(prev => [...prev, {
-            id: Date.now() + 2,
-            text: "Your itinerary has been generated. Check the itinerary view for details.",
+            id: Date.now() + 1,
+            text: "Your itinerary has been updated with your flight selection.",
             sender: 'ai',
             timestamp: new Date(),
             hasItinerary: true
@@ -504,42 +554,80 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
           
           // Notify parent component with the itinerary data
           if (onSendMessage && typeof onSendMessage === 'function') {
-            onSendMessage(JSON.stringify(finalResponse.data));
+            onSendMessage(JSON.stringify(flightResponse.data));
           }
-        } else if (finalResponse.error) {
-          // Add the error message
-          setMessages(prev => [...prev, {
-            id: Date.now() + 2,
-            text: `Error completing itinerary: ${finalResponse.error}`,
-            sender: 'ai',
-            timestamp: new Date()
-          }]);
         } else {
-          // Generic completion message
+          // We need to continue processing to get the final itinerary
+          // Add a message indicating we're continuing
           setMessages(prev => [...prev, {
-            id: Date.now() + 2,
-            text: "Your trip has been planned, but no detailed itinerary could be generated.",
+            id: Date.now() + 1, 
+            text: "Generating your complete itinerary...",
             sender: 'ai',
-            timestamp: new Date()
+            timestamp: new Date(),
+            isTemporary: true
           }]);
+          
+          // Continue processing to get the final itinerary
+          console.log(`Calling continueProcessing with conversationId ${conversationId}`);
+          const finalResponse = await continueProcessing(conversationId);
+          console.log("Final itinerary response:", finalResponse);
+          
+          // Remove the temporary message
+          setMessages(prev => prev.filter(msg => !msg.isTemporary));
+          
+          // Check if we got a valid itinerary data
+          if (finalResponse.data?.itinerary || finalResponse.data?.daily_itinerary) {
+            // Add a message about the itinerary update
+            setMessages(prev => [...prev, {
+              id: Date.now() + 2,
+              text: "Your itinerary has been generated. Check the itinerary view for details.",
+              sender: 'ai',
+              timestamp: new Date(),
+              hasItinerary: true
+            }]);
+            
+            // Notify parent component with the itinerary data
+            if (onSendMessage && typeof onSendMessage === 'function') {
+              onSendMessage(JSON.stringify(finalResponse.data));
+            }
+          } else if (finalResponse.error) {
+            // Add the error message
+            setMessages(prev => [...prev, {
+              id: Date.now() + 2,
+              text: `Error completing itinerary: ${finalResponse.error}`,
+              sender: 'ai',
+              timestamp: new Date()
+            }]);
+          } else {
+            // Generic completion message
+            setMessages(prev => [...prev, {
+              id: Date.now() + 2,
+              text: "Your trip has been planned, but no detailed itinerary could be generated.",
+              sender: 'ai',
+              timestamp: new Date()
+            }]);
+          }
         }
+        
+        // Hide typing indicator
+        setIsTyping(false);
+      } catch (error) {
+        console.error('Error selecting flights:', error);
+        
+        // Add error message
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Sorry, there was an error processing your flight selection: ${error.message}. Please try again.`,
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+        
+        // Hide typing indicator
+        setIsTyping(false);
+        
+        // Reset flight selection step
+        setFlightSelectionStep('outbound');
       }
-      
-      // Hide typing indicator
-      setIsTyping(false);
-    } catch (error) {
-      console.error('Error selecting flight:', error);
-      
-      // Add error message
-      setMessages(prev => [...prev, {
-        id: Date.now(),
-        text: `Sorry, there was an error processing your flight selection: ${error.message}. Please try again.`,
-        sender: 'ai',
-        timestamp: new Date()
-      }]);
-      
-      // Hide typing indicator
-      setIsTyping(false);
     }
   };
   
@@ -900,6 +988,7 @@ const ChatInterface = ({ onSendMessage, apiResponse }) => {
           <FlightSelection 
             flights={message.flightOptions} 
             onSelectFlight={handleFlightSelection}
+            flightType={flightSelectionStep === 'outbound' ? 'Outbound' : 'Return'}
           />
         </div>
       );

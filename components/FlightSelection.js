@@ -2,7 +2,7 @@ import React from 'react';
 import FlightCard from './FlightCard';
 import { motion } from 'framer-motion';
 
-const FlightSelection = ({ flights, onSelectFlight }) => {
+const FlightSelection = ({ flights, onSelectFlight, flightType = 'Outbound' }) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -10,9 +10,9 @@ const FlightSelection = ({ flights, onSelectFlight }) => {
       className="w-full bg-gray-50 rounded-lg p-3 my-2"
     >
       <div className="text-center mb-2">
-        <h3 className="text-base font-semibold text-gray-800">Select a flight</h3>
+        <h3 className="text-base font-semibold text-gray-800">Select {flightType} Flight</h3>
         <p className="text-xs text-gray-600">
-          Choose the flight that best meets your needs
+          Choose the {flightType.toLowerCase()} flight that best meets your needs
         </p>
       </div>
       
