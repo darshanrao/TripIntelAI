@@ -87,46 +87,17 @@ const executeRequest = async (endpoint, method, data = null, formData = null) =>
  * Send a chat message to the backend
  * @param {string} message - User's chat message
  * @param {string} conversationId - Optional conversation ID
- * @param {Object} options - Additional options like requestFlightOptions
+ * @param {string} type - Message type
+ * @param {Object} data - Additional data for the message
  * @returns {Promise} - Promise with the response
  */
-export const sendChatMessage = async (message, conversationId = null, options = {}) => {
-  if (!message || message.trim() === '') {
-    console.error('Empty message detected in sendChatMessage');
-    return { 
-      success: false, 
-      error: 'No message provided',
-      response: 'Error: No message provided'
-    };
-  }
-  
-  try {
-    console.log('Sending message to API:', message, options);
-    
-    // Use the /chat endpoint and add step_by_step flag
-    const response = await fetch(`${API_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        message: message, // API expects message parameter
-        conversation_id: conversationId,
-        step_by_step: true, // Ensure step-by-step is sent
-        request_flight_options: options.requestFlightOptions || false, // Add flag for flight options
-        search_results_id: options.searchResults || null // Add search results ID from previous call
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('API error:', error);
-    throw error;
-  }
+export const sendChatMessage = async (message, conversationId = null, type = 'info', data = {}) => {
+  return executeRequest('/chat', 'POST', {
+    type,
+    message,
+    conversation_id: conversationId,
+    data
+  });
 };
 
 /**

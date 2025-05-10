@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import { sendChatMessage } from '../services/api';
 
 export default function Home() {
-  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedDay, setSelectedDay] = useState(0);
   const [itineraryData, setItineraryData] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
@@ -61,41 +61,17 @@ export default function Home() {
     }
   }, [apiResponse]);
 
-  const handleChatMessage = async (message, options = {}) => {
-    console.log('Message from chat:', message, options);
+  const handleChatMessage = async (response) => {
+    setApiResponse(response);
     
-    if (!message || message.trim() === '') {
-      console.error('Empty message detected');
+    if (response.error) {
+      console.error('API returned an error:', response.error);
       return;
     }
     
-    setIsLoading(true);
-    
-    try {
-      // Call the API with options
-      const response = await sendChatMessage(message, null, options);
-      console.log('API response:', response);
-      
-      // Store the API response
-      setApiResponse(response);
-      
-      if (response.error) {
-        console.error('API returned an error:', response.error);
-        setIsLoading(false);
-        return;
-      }
-      
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error processing message:', error);
-      
-      // Set error response
-      setApiResponse({
-        error: error.message,
-        message: "Sorry, there was an error processing your request."
-      });
-      
-      setIsLoading(false);
+    // Handle itinerary data if present
+    if (response.type === 'generate_itinerary' && response.data?.itinerary) {
+      setItineraryData(response.data.itinerary);
     }
   };
 

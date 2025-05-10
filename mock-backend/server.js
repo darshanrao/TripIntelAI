@@ -99,20 +99,12 @@ app.get('/conversations/:id', async (req, res) => {
   });
 });
 
-// Flight options endpoint (called after search)
+// Chat endpoint
 app.post('/chat', async (req, res) => {
   // Simulate processing delay
   await delay(1000);
   
-  const { message, conversation_id, request_flight_options, search_results_id } = req.body;
-  
-  if (!message || message.trim() === '') {
-    return res.status(400).json({
-      success: false,
-      error: 'No message provided',
-      response: JSON.stringify({ message: 'Error: No message provided' })
-    });
-  }
+  const { type, message, conversation_id, data } = req.body;
   
   // Get conversation or create a new one if not provided
   const conversationId = conversation_id || uuidv4();
@@ -120,56 +112,151 @@ app.post('/chat', async (req, res) => {
     conversations[conversationId] = [];
   }
   
-  // Add user message to conversation
-  conversations[conversationId].push({
-    id: Date.now(),
-    text: message,
-    sender: 'user',
-    timestamp: new Date()
-  });
-  
-  // Check if this is a request for flight options
-  if (request_flight_options) {
-    console.log(`Flight options requested with search ID: ${search_results_id || 'none'}`);
-    
-    // Return flight options
-    return res.status(200).json({
-      success: true,
-      conversation_id: conversationId,
-      interaction_type: 'flight_selection',
-      message: "Here are some flight options for your trip. Please select one that best suits your needs:",
-      data: {
-        flights: mockFlights
-      }
+  // Add user message to conversation if present
+  if (message) {
+    conversations[conversationId].push({
+      id: Date.now(),
+      text: message,
+      sender: 'user',
+      timestamp: new Date()
     });
   }
   
-  // If not a flight options request, continue with normal chat processing
-  
-  // Generate a response based on message content
-  const aiResponse = findResponseByKeywords(message);
-  
-  // Add AI response to conversation
-  conversations[conversationId].push({
-    id: Date.now() + 1,
-    text: aiResponse,
-    sender: 'ai',
-    timestamp: new Date()
-  });
-  
-  // Determine if we should include itinerary data
-  const shouldIncludeItinerary = message.toLowerCase().includes('itinerary') || 
-                               message.toLowerCase().includes('plan') || 
-                               Math.random() < 0.2; // Occasionally include itinerary randomly
-  
-  const responseData = {
-    success: true,
-    conversation_id: conversationId,
-    response: aiResponse,
-    data: shouldIncludeItinerary ? mockItineraryData : null
-  };
-  
-  res.status(200).json(responseData);
+  // Handle different message types
+  switch (type) {
+    case 'initialize':
+      // Initialize conversation with welcome message
+      res.status(200).json({
+        success: true,
+        conversation_id: conversationId,
+        type: 'initialize',
+        message: "Hi there! I'm your AI travel assistant. Where would you like to go?"
+      });
+      break;
+      
+    case 'info':
+      // Process initial trip information and search for flights
+      const aiResponse = findResponseByKeywords(message);
+      
+      // Add AI response to conversation
+      conversations[conversationId].push({
+        id: Date.now() + 1,
+        text: aiResponse,
+        sender: 'ai',
+        timestamp: new Date()
+      });
+      
+      // Return flight search results
+      res.status(200).json({
+        success: true,
+        conversation_id: conversationId,
+        type: 'flight_search_outbound',
+        message: "Here are some flight options for your trip. Please select one that best suits your needs:",
+        data: {
+          flights: mockFlights.map((flight, index) => ({
+            ...flight,
+            id: `dep-${index}`,
+            flight_type: 'departure'
+          }))
+        }
+      });
+      break;
+      
+    case 'flight_select_outbound':
+      // Process outbound flight selection and search for return flights
+      const outboundFlight = mockFlights.find(f => f.id === data.selected_flight_id) || mockFlights[0];
+      
+      // Store the selected outbound flight in the conversation data
+      if (!conversations[conversationId].data) {
+        conversations[conversationId].data = {};
+      }
+      conversations[conversationId].data.selectedOutboundFlight = outboundFlight;
+      
+      res.status(200).json({
+        success: true,
+        conversation_id: conversationId,
+        type: 'flight_search_inbound',
+        message: "Great! Now please select your return flight:",
+        data: {
+          flights: mockFlights.map((flight, index) => ({
+            ...flight,
+            id: `ret-${index}`,
+            flight_type: 'return',
+            departure_city: flight.arrival_city,
+            arrival_city: flight.departure_city,
+            departure_airport: flight.arrival_airport,
+            arrival_airport: flight.departure_airport
+          }))
+        }
+      });
+      break;
+      
+    case 'flight_select_inbound':
+      // Process inbound flight selection and generate itinerary
+      const inboundFlight = mockFlights.find(f => f.id === data.selected_flight_id) || mockFlights[1];
+      
+      // Get the previously selected outbound flight from conversation data
+      const storedOutboundFlight = conversations[conversationId].data?.selectedOutboundFlight || mockFlights[0];
+      
+      // Create itinerary with selected flights
+      const itinerary = {
+        ...mockItineraryData,
+        flights: {
+          outbound: storedOutboundFlight,
+          inbound: inboundFlight
+        }
+      };
+      
+      // Add AI response to conversation
+      conversations[conversationId].push({
+        id: Date.now() + 1,
+        text: JSON.stringify({ 
+          message: "Your itinerary has been generated with your selected flights. Check the itinerary view for details.",
+          type: 'generate_itinerary',
+          data: { itinerary }
+        }),
+        sender: 'ai',
+        timestamp: new Date()
+      });
+      
+      res.status(200).json({
+        success: true,
+        conversation_id: conversationId,
+        type: 'generate_itinerary',
+        message: "Your itinerary has been generated with your selected flights. Check the itinerary view for details.",
+        data: {
+          itinerary
+        }
+      });
+      break;
+      
+    case 'chat':
+      // Handle regular chat messages
+      const response = findResponseByKeywords(message);
+      
+      // Add AI response to conversation
+      conversations[conversationId].push({
+        id: Date.now() + 1,
+        text: response,
+        sender: 'ai',
+        timestamp: new Date()
+      });
+      
+      res.status(200).json({
+        success: true,
+        conversation_id: conversationId,
+        type: 'chat',
+        message: JSON.parse(response).message
+      });
+      break;
+      
+    default:
+      res.status(400).json({
+        success: false,
+        error: 'Invalid message type',
+        message: 'Please provide a valid message type'
+      });
+  }
 });
 
 // Save audio endpoint (mirrors voice-input functionality)
