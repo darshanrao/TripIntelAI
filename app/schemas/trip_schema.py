@@ -48,11 +48,12 @@ class Budget(BaseModel):
     currency: str = "USD"
 
 class TripMetadata(BaseModel):
-    source: str
-    destination: str
-    start_date: datetime
-    end_date: datetime
-    num_people: int
+    """Metadata for a trip, with optional fields to support partial information."""
+    source: Optional[str] = None
+    destination: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    num_people: Optional[int] = None
     preferences: List[str] = []
 
 class TripData(BaseModel):

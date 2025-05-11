@@ -23,64 +23,27 @@ const generateRequestHash = (endpoint, params) => {
  * @param {string} endpoint - API endpoint
  * @param {string} method - HTTP method
  * @param {object} data - Request body
- * @param {FormData|null} formData - Form data for file uploads
  * @returns {Promise} - Promise with response
  */
-const executeRequest = async (endpoint, method, data = null, formData = null) => {
+const executeRequest = async (endpoint, method, data = null) => {
   const fullUrl = `${API_URL}${endpoint}`;
-  const requestKey = generateRequestHash(fullUrl, data || formData);
   
-  // Check if an identical request was recently made
-  if (recentRequests.has(requestKey)) {
-    console.log(`Returning cached response for ${endpoint}`);
-    return recentRequests.get(requestKey);
-  }
-  
-  // Check if same request is in flight - return the existing promise
-  if (pendingRequests.has(requestKey)) {
-    console.log(`Request to ${endpoint} already in progress, reusing promise`);
-    return pendingRequests.get(requestKey);
-  }
-  
-  // Prepare request options
   const options = {
     method,
-    headers: formData ? {} : { 'Content-Type': 'application/json' },
-    body: formData || (data ? JSON.stringify(data) : undefined),
-  };
-  
-  // Add X-Request-ID header for idempotency
-  options.headers = {
-    ...options.headers, 
-    'X-Request-ID': `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    headers: { 'Content-Type': 'application/json' },
+    body: data ? JSON.stringify(data) : undefined,
   };
 
-  // Create the request promise
-  const requestPromise = (async () => {
-    try {
-      console.log(`Executing request to ${endpoint}`);
-      const response = await fetch(fullUrl, options);
-      
-      if (!response.ok) {
-        throw new Error(`Error: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      
-      // Cache the result briefly to prevent duplicates
-      recentRequests.set(requestKey, result);
-      setTimeout(() => recentRequests.delete(requestKey), CACHE_EXPIRATION);
-      
-      return result;
-    } finally {
-      // Remove from pending requests when done
-      pendingRequests.delete(requestKey);
+  try {
+    const response = await fetch(fullUrl, options);
+    if (!response.ok) {
+      throw new Error(`Error: ${response.statusText}`);
     }
-  })();
-  
-  // Store the promise
-  pendingRequests.set(requestKey, requestPromise);
-  return requestPromise;
+    return await response.json();
+  } catch (error) {
+    console.error('API error:', error);
+    throw error;
+  }
 };
 
 /**
@@ -105,23 +68,7 @@ export const sendChatMessage = async (message, conversationId = null, type = 'in
  * @returns {Promise} - Promise with the conversation ID
  */
 export const createConversation = async () => {
-  try {
-    const response = await fetch(`${API_URL}/conversations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('API error:', error);
-    throw error;
-  }
+  return executeRequest('/conversations', 'POST');
 };
 
 /**
@@ -130,23 +77,7 @@ export const createConversation = async () => {
  * @returns {Promise} - Promise with the conversation history
  */
 export const getConversationHistory = async (conversationId) => {
-  try {
-    const response = await fetch(`${API_URL}/conversations/${conversationId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('API error:', error);
-    throw error;
-  }
+  return executeRequest(`/conversations/${conversationId}`, 'GET');
 };
 
 /**
@@ -215,39 +146,31 @@ export const saveTrip = async (tripData, name = null) => {
 };
 
 /**
- * Send audio recording to the new save-audio endpoint
+ * Send audio recording to the backend
  * @param {Blob} audioBlob - Recorded audio file as Blob
- * @param {Object} options - Additional options like requestFlightOptions
+ * @param {Object} requestOptions - Additional options like requestFlightOptions
  * @returns {Promise} - Promise with the response
  */
-export const saveAndProcessAudio = async (audioBlob, options = {}) => {
+export const saveAndProcessAudio = async (audioBlob, requestOptions = {}) => {
+  const formData = new FormData();
+  const file = new File([audioBlob], 'recording.mp3', { type: 'audio/mpeg' });
+  formData.append('file', file);
+  
+  if (requestOptions.requestFlightOptions) {
+    formData.append('request_flight_options', 'true');
+  }
+
+  const fullUrl = `${API_URL}/save-audio`;
+  const fetchOptions = {
+    method: 'POST',
+    body: formData,
+  };
+
   try {
-    // Create form data to send the file
-    const formData = new FormData();
-    
-    // Add audio file
-    // Always use .mp3 extension and explicitly set the content type
-    const file = new File([audioBlob], 'recording.mp3', { 
-      type: 'audio/mpeg' 
-    });
-    formData.append('file', file);
-    
-    // Add flag for flight options if needed
-    if (options.requestFlightOptions) {
-      formData.append('request_flight_options', 'true');
-    }
-    
-    console.log(`Sending audio file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`, options);
-
-    const response = await fetch(`${API_URL}/save-audio`, {
-      method: 'POST',
-      body: formData,
-    });
-
+    const response = await fetch(fullUrl, fetchOptions);
     if (!response.ok) {
       throw new Error(`Error: ${response.statusText}`);
     }
-
     return await response.json();
   } catch (error) {
     console.error('API error:', error);
@@ -451,31 +374,12 @@ export const searchFlights = async (message, conversationId = null) => {
  * @returns {Promise} - Promise with the response
  */
 export const initiateTravelPlanning = async (destination, departureDate, returnDate, numTravelers) => {
-  try {
-    console.log('Initiating travel planning with:', { destination, departureDate, returnDate, numTravelers });
-    
-    const response = await fetch(`${API_URL}/initiate-travel-planning`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        destination, 
-        departure_date: departureDate, 
-        return_date: returnDate, 
-        num_travelers: numTravelers 
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('API error initiating travel planning:', error);
-    throw error;
-  }
+  return executeRequest('/initiate-travel-planning', 'POST', {
+    destination,
+    departure_date: departureDate,
+    return_date: returnDate,
+    num_travelers: numTravelers
+  });
 };
 
 /**
@@ -488,32 +392,13 @@ export const initiateTravelPlanning = async (destination, departureDate, returnD
  * @returns {Promise} - Promise with flight search results
  */
 export const searchFlightsV2 = async (planningId, destination, departureDate, returnDate, numTravelers) => {
-  try {
-    console.log('Searching flights with params:', { planningId, destination, departureDate, returnDate, numTravelers });
-    
-    const response = await fetch(`${API_URL}/flight-search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        planning_id: planningId,
-        destination, 
-        departure_date: departureDate, 
-        return_date: returnDate, 
-        num_travelers: numTravelers 
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Flight search API error:', error);
-    throw error;
-  }
+  return executeRequest('/flight-search', 'POST', {
+    planning_id: planningId,
+    destination,
+    departure_date: departureDate,
+    return_date: returnDate,
+    num_travelers: numTravelers
+  });
 };
 
 /**
@@ -524,30 +409,11 @@ export const searchFlightsV2 = async (planningId, destination, departureDate, re
  * @returns {Promise} - Promise with flight selection confirmation
  */
 export const selectFlightsV2 = async (planningId, departureFlightId, returnFlightId) => {
-  try {
-    console.log('Selecting flights:', { planningId, departureFlightId, returnFlightId });
-    
-    const response = await fetch(`${API_URL}/flight-select`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        planning_id: planningId,
-        departure_flight_id: departureFlightId,
-        return_flight_id: returnFlightId
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('API error selecting flights:', error);
-    throw error;
-  }
+  return executeRequest('/flight-select', 'POST', {
+    planning_id: planningId,
+    departure_flight_id: departureFlightId,
+    return_flight_id: returnFlightId
+  });
 };
 
 /**
@@ -558,28 +424,9 @@ export const selectFlightsV2 = async (planningId, departureFlightId, returnFligh
  * @returns {Promise} - Promise with the generated itinerary
  */
 export const generateItinerary = async (planningId, departureFlightId, returnFlightId) => {
-  try {
-    console.log('Generating itinerary:', { planningId, departureFlightId, returnFlightId });
-    
-    const response = await fetch(`${API_URL}/generate-itinerary`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        planning_id: planningId,
-        departure_flight_id: departureFlightId,
-        return_flight_id: returnFlightId
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('API error generating itinerary:', error);
-    throw error;
-  }
+  return executeRequest('/generate-itinerary', 'POST', {
+    planning_id: planningId,
+    departure_flight_id: departureFlightId,
+    return_flight_id: returnFlightId
+  });
 }; 

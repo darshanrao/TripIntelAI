@@ -8,6 +8,8 @@ import os
 import asyncio
 import logging
 import traceback
+from app.utils.anthropic_client import get_anthropic_client
+from app.utils.logger import logger
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -27,16 +29,16 @@ Extract the following information if present:
 
 When extracting locations:
 - Correct common typos (e.g., "bsoton" → "Boston", "NYC" → "New York City")
-- Default source to "Unknown" if not specified
+- Return null for source if not specified
 
 When extracting dates:
 - Recognize various formats (e.g., "May 18th", "05/18/2025", "next month")
 - Convert to YYYY-MM-DD format
 - Handle typos in month names (e.g., "mmay" → "May")
-- If only one date is mentioned, assume a 3-day trip
-- If no year is specified, assume the next available date (not in the past)
+- Return null for any missing dates
+- Do not make assumptions about trip duration
 
-If any information is missing, make a reasonable guess or use null.
+If any information is missing, return null for that field.
 Format dates as YYYY-MM-DD.
 
 Return the output as a JSON object with these fields:
@@ -44,13 +46,13 @@ Return the output as a JSON object with these fields:
 - destination: string or null
 - start_date: YYYY-MM-DD string or null
 - end_date: YYYY-MM-DD string or null
-- num_people: integer or 1 if not specified
+- num_people: integer or null
 - preferences: array of strings or empty array
 
 IMPORTANT: Return ONLY the JSON object without any explanations, markdown, or additional text. No explanation before or after.
 
 Example response:
-{{"source":"Boston","destination":"New York City","start_date":"2025-05-15","end_date":"2025-05-18","num_people":2,"preferences":["budget","restaurants"]}}
+{{"source":null,"destination":"New York City","start_date":null,"end_date":null,"num_people":null,"preferences":[]}}
 '''
 
 class GraphState(TypedDict):
@@ -114,144 +116,118 @@ def extract_json_from_llm_response(text):
     logger.error("Failed to extract any valid JSON from the response")
     return None
 
-async def intent_parser_node(state: GraphState) -> GraphState:
+async def intent_parser_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Extract structured travel intent from user query.
+    Parse the user's intent and extract trip metadata using Claude.
     
     Args:
         state: Current state containing the user's query
         
     Returns:
-        Updated state with extracted intent
+        Updated state with extracted metadata
     """
-    # Get the user query
-    user_query = state.get("raw_query", "")
-    
-    logger.info(f"Processing user query: '{user_query}'")
-    
-    if not user_query:
-        logger.error("No user query provided")
-        state["error"] = "No user query provided"
-        return state
-    
-    # Initialize LLM
     try:
-        # Use direct Anthropic client instead of langchain wrapper for testing
-        from anthropic import Anthropic
+        query = state.get("query")
+        if not query:
+            logger.error("No query found in state")
+            return {
+                **state,
+                "error": "No query provided",
+                "is_valid": False
+            }
+            
+        logger.info(f"Processing user query: '{state}'")
         
-        # Get API key from environment
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            state["error"] = "ANTHROPIC_API_KEY not found in environment variables"
-            return state
-        
-        client = Anthropic(api_key=api_key)
+        # Initialize Anthropic client
+        client = get_anthropic_client()
         logger.info("Successfully initialized Anthropic client directly")
         
-        # Format the prompt
-        prompt = INTENT_PARSER_PROMPT.format(query=user_query)
+        # Create prompt for Claude
+        prompt = f"""
+        You are a travel planning assistant. Extract travel information from this query:
+        "{query}"
         
-        # Use direct API call
+        Extract the following information:
+        - source (departure city/country)
+        - destination (arrival city/country)
+        - start_date (in YYYY-MM-DD format)
+        - end_date (in YYYY-MM-DD format)
+        - num_people (as an integer)
+        - preferences (list of interests/requirements)
+        
+        Return ONLY a JSON object with these fields. Use null for missing values.
+        Example format:
+        {{
+            "source": "New York",
+            "destination": "Paris",
+            "start_date": "2024-05-15",
+            "end_date": "2024-05-22",
+            "num_people": 2,
+            "preferences": ["museums", "food"]
+        }}
+        """
+        
+        logger.info("Calling Claude API directly")
+        response = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+        
+        # Extract the response text - properly handle the Message object
+        response_text = response.content[0].text
+        if not response_text:
+            raise ValueError("Empty response from Claude")
+            
+        logger.info(f"Received raw response from Claude: {response_text[:100]}...")
+        
+        # Parse the JSON response
         try:
-            logger.info("Calling Claude API directly")
-            response = client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=1000,
-                temperature=0,
-                system="You extract travel information and return it as valid JSON.",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            # Get content from response
-            content = response.content[0].text
-            logger.info(f"Received raw response from Claude: {content[:150]}...")
-            
-            # Extract JSON
-            intent_data = extract_json_from_llm_response(content)
-            
-            if not intent_data:
-                logger.error("Failed to extract valid JSON from Claude's response")
-                state["error"] = "Failed to parse intent: Invalid JSON format in response"
-                return state
-            
+            logger.info(f"Attempting to extract JSON from text: {response_text[:100]}...")
+            # Find JSON pattern in the response
+            json_pattern = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_pattern:
+                json_str = json_pattern.group(0)
+                logger.info(f"Found JSON pattern: {json_str[:100]}...")
+                intent_data = json.loads(json_str)
+            else:
+                raise ValueError("No JSON object found in response")
+                
             logger.info(f"Successfully parsed intent data: {intent_data}")
             
-            # Convert date strings to datetime objects if present
-            try:
-                if intent_data.get("start_date"):
-                    logger.info(f"Converting start_date: {intent_data['start_date']}")
-                    try:
-                        intent_data["start_date"] = datetime.fromisoformat(intent_data["start_date"])
-                        logger.info(f"Converted start_date to: {intent_data['start_date']}")
-                    except ValueError as e:
-                        logger.error(f"Error converting start_date: {str(e)}")
-                        # Try to parse in another format
-                        try:
-                            from dateutil import parser
-                            intent_data["start_date"] = parser.parse(intent_data["start_date"])
-                            logger.info(f"Converted start_date using dateutil to: {intent_data['start_date']}")
-                        except Exception as e2:
-                            logger.error(f"Failed to parse start_date with dateutil: {str(e2)}")
-                            # Keep as string if it's still there
-                            if isinstance(intent_data.get("start_date"), str):
-                                logger.info("Keeping start_date as string")
-                            else:
-                                intent_data["start_date"] = None
-                
-                if intent_data.get("end_date"):
-                    logger.info(f"Converting end_date: {intent_data['end_date']}")
-                    try:
-                        intent_data["end_date"] = datetime.fromisoformat(intent_data["end_date"])
-                        logger.info(f"Converted end_date to: {intent_data['end_date']}")
-                    except ValueError as e:
-                        logger.error(f"Error converting end_date: {str(e)}")
-                        # Try to parse in another format
-                        try:
-                            from dateutil import parser
-                            intent_data["end_date"] = parser.parse(intent_data["end_date"])
-                            logger.info(f"Converted end_date using dateutil to: {intent_data['end_date']}")
-                        except Exception as e2:
-                            logger.error(f"Failed to parse end_date with dateutil: {str(e2)}")
-                            # Keep as string if it's still there
-                            if isinstance(intent_data.get("end_date"), str):
-                                logger.info("Keeping end_date as string")
-                            else:
-                                intent_data["end_date"] = None
-                
-                # Create a TripMetadata instance
-                logger.info("Creating TripMetadata instance")
-                trip_metadata = TripMetadata(
-                    source=intent_data.get("source", "Unknown"),
-                    destination=intent_data.get("destination", "Unknown"),
-                    start_date=intent_data.get("start_date", None),
-                    end_date=intent_data.get("end_date", None),
-                    num_people=intent_data.get("num_people", 1),
-                    preferences=intent_data.get("preferences", [])
-                )
-                
-                logger.info(f"Created TripMetadata: {trip_metadata}")
-                
-                # Add to state
-                state["metadata"] = trip_metadata
-                logger.info("Successfully added metadata to state")
-                
-            except Exception as e:
-                logger.error(f"Error processing intent data: {str(e)}")
-                logger.error(traceback.format_exc())
-                state["error"] = f"Failed to process intent data: {str(e)}"
+            # Ensure preferences is a list
+            if intent_data.get("preferences") is None:
+                intent_data["preferences"] = []
             
-        except Exception as e:
-            logger.error(f"Error calling Claude API: {str(e)}")
-            logger.error(traceback.format_exc())
-            state["error"] = f"Failed to call Claude API: {str(e)}"
-            return state
-        
+            # Create TripMetadata instance
+            logger.info("Creating TripMetadata instance")
+            metadata = TripMetadata(**intent_data)
+            
+            # Update state with metadata
+            return {
+                **state,
+                "metadata": metadata,
+                "is_valid": True
+            }
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from response: {str(e)}")
+            return {
+                **state,
+                "error": f"Failed to parse response: {str(e)}",
+                "is_valid": False
+            }
+            
     except Exception as e:
-        logger.error(f"Error in LLM processing: {str(e)}")
-        logger.error(traceback.format_exc())
-        state["error"] = f"Failed to parse intent: {str(e)}"
-    
-    return state
+        logger.error(f"Error in intent parser: {str(e)}")
+        return {
+            **state,
+            "error": str(e),
+            "is_valid": False
+        }
 
 async def test_claude_json():
     # Initialize Claude

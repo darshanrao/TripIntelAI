@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from app.graph.trip_planner_graph import TripPlannerGraph
-from app.schemas.trip_schema import TripData
+from app.schemas.trip_schema import TripData, TripMetadata
 from typing import Optional, List, Dict, Any, Set
 import tempfile
 import os
@@ -17,6 +17,10 @@ from dotenv import load_dotenv
 import logging
 import asyncio
 import json
+
+# Import our utility modules
+from app.utils.logger import logger
+from app.utils.anthropic_client import anthropic_client
 
 # Import our pipeline functions
 from app.pipeline import process_travel_query, process_feedback, Spinner
@@ -199,7 +203,7 @@ async def handle_chat_interaction(request: ChatRequest, state: Dict[str, Any]) -
         # Only process if not already processed
         if not state.get("planning_complete"):
             logger.info(f"Processing chat message: '{request.message}'")
-            state = await process_travel_query(request.message, interactive=True)
+            state = await process_travel_query(request.message)
             conversation_states[request.conversation_id] = state
         else:
             logger.info("Skipping processing - planning already complete")
@@ -1074,141 +1078,6 @@ async def save_audio(file: UploadFile = File(...), keep_debug_files: bool = Fals
             "error": str(e)
         }
 
-async def process_valid_state(state, conversation_id):
-    """
-    Process a valid state through the planning nodes, implementing a step-by-step workflow.
-    This function follows the same path as the CLI's process_travel_query function.
-    """
-    try:
-        print("[DEBUG] Processing valid state")
-        
-        # Step 4: Planner Node (same as CLI)
-        print("[DEBUG] Processing with planner_node")
-        state = await planner_node(state)
-        
-        # Step 5: Process agent nodes (implemented to match CLI process_nodes)
-        nodes_to_call = state.get('nodes_to_call', [])
-        print(f"[DEBUG] Nodes to call: {nodes_to_call}")
-        
-        # Check if we need to process flights first
-        if 'flights' in nodes_to_call:
-            print("[DEBUG] Processing with flights_node")
-            
-            # Initialize Amadeus API client with credentials
-            # This ensures we use the real API client, just like the CLI version
-            api_key = os.getenv("AMADEUS_API_KEY")
-            api_secret = os.getenv("AMADEUS_SECRET_KEY")
-            
-            # Log the API credentials status (not the actual credentials)
-            print(f"[DEBUG] Amadeus API credentials present: {bool(api_key and api_secret)}")
-            
-            # Process flights - will use real flight lookup if credentials are available
-            state = await flights_node(state)
-            
-            # Check if we have flights to select
-            if not state.get("flights", []):
-                print("[WARNING] No flights found, generating mock flight data")
-                # Generate mock flight data to ensure we always have options
-                from app.nodes.agent_nodes import _generate_mock_flights
-                state = await _generate_mock_flights(state)
-            
-            # Double check we have flights now
-            if state.get("flights", []):
-                # Save the state with flights for selection
-                state["awaiting_flight_selection"] = True
-                conversation_states[conversation_id] = state
-                
-                print(f"[DEBUG] Got {len(state['flights'])} flight options, returning for selection")
-                
-                # Return response asking for flight selection
-                return InteractionResponse(
-                    conversation_id=conversation_id,
-                    success=True,
-                    message="Please select a flight that best suits your needs:",
-                    data={"flights": state["flights"]},
-                    interaction_type="flight_selection"
-                )
-            else:
-                print("[ERROR] Still no flights available after fallback")
-        
-        # If we reach here without returning a flight selection request,
-        # then either:
-        # 1. No flight node needed
-        # 2. No flights available
-        # Continue with other nodes
-        
-        # Process other nodes
-        return await process_remaining_nodes(state, nodes_to_call, conversation_id)
-        
-    except Exception as e:
-        print(f"[ERROR] Error in process_valid_state: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def process_remaining_nodes(state, nodes_to_call, conversation_id):
-    """
-    Process the remaining nodes after flight selection or if no flight selection is needed.
-    """
-    try:
-        # Skip the flights node as it's handled separately
-        remaining_nodes = [node for node in nodes_to_call if node != "flights"]
-        
-        for node in remaining_nodes:
-            print(f"[DEBUG] Processing node: {node}")
-            
-            if node == "route":
-                state = await route_node(state)
-            elif node == "places":
-                state = await places_node(state)
-            elif node == "restaurants":
-                state = await restaurants_node(state)
-            elif node == "hotel":
-                state = await hotel_node(state)
-            elif node == "budget":
-                state = await budget_node(state)
-        
-        # Handle reviews
-        print("[DEBUG] Processing reviews")
-        state = await reviews_node(state)
-        
-        # Generate itinerary
-        print("[DEBUG] Generating itinerary")
-        state = await summary_node(state)
-        
-        # Mark planning as complete and clear nodes_to_call to prevent reprocessing
-        state["planning_complete"] = True
-        state["nodes_to_call"] = []  # Clear the nodes to prevent reprocessing
-        
-        # Save updated state
-        conversation_states[conversation_id] = state
-        
-        # Return the completed itinerary
-        return InteractionResponse(
-            conversation_id=conversation_id,
-            success=True,
-            message="Here's your travel itinerary. Would you like to modify anything?",
-            data={
-                "itinerary": state.get("itinerary", "No itinerary could be generated."),
-                "trip_summary": state.get("trip_summary", {}),
-                "daily_itinerary": state.get("daily_itinerary", {})
-            },
-            interaction_type="feedback"
-        )
-        
-    except Exception as e:
-        print(f"[ERROR] Error in process_remaining_nodes: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
-        # Return error response
-        return InteractionResponse(
-            conversation_id=conversation_id,
-            success=False,
-            message=f"An error occurred while processing your request: {str(e)}",
-            error=str(e)
-        )
-
 @app.post("/continue-processing", response_model=InteractionResponse)
 async def continue_processing(request: ChatRequest):
     """
@@ -1252,7 +1121,7 @@ async def continue_processing(request: ChatRequest):
         elif state.get("planning_complete"):
             # If planning is already complete, just return the itinerary
             print("[DEBUG] Planning is already complete, returning itinerary")
-            return await process_valid_state(state, request.conversation_id)
+            return await process_travel_query(state["query"])
         else:
             # No flight selection was done, or we're in an unexpected state
             print(f"[ERROR] Unexpected state in continue-processing. selected_flights: {state.get('selected_flights')}, planning_complete: {state.get('planning_complete')}")
@@ -1355,34 +1224,93 @@ async def broadcast_update(conversation_id: str, update_type: str, data: Dict[st
         for dead in dead_connections:
             connections.discard(dead)
 
+async def process_travel_query(query: str) -> dict:
+    """
+    Process a travel query through the validation and planning pipeline.
+    
+    Args:
+        query: User's travel query
+        
+    Returns:
+        dict: Results containing trip details or error message
+    """
+    try:
+        # Initialize state
+        state = {
+            "query": query,
+            "raw_query": query,
+            "is_valid": False,
+            "metadata": None,
+            "next_question": None,
+            "error": None
+        }
+        
+        # Create graph instance
+        graph = TripPlannerGraph()
+        
+        # Process query
+        result = await graph.process(state)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing query: {str(e)}")
+        return {
+            "is_valid": False,
+            "error": str(e)
+        }
+
+async def main():
+    print("=" * 80)
+    print("🌍 Welcome to TripIntelAI - Your AI Travel Planner 🌍")
+    print("=" * 80)
+    print("Please enter your travel query. For example:")
+    print("  'I want to plan a trip from Boston to NYC from May 15 to May 18, 2025 for 2 people'")
+    print("  'Plan a family vacation to Paris in summer for 5 days with focus on museums'")
+    print("-" * 80)
+    
+    while True:
+        # Get user input
+        query = input("\nEnter your travel query (or 'exit' to quit): ")
+        
+        if query.lower() in ['exit', 'quit', 'q']:
+            print("\nThank you for using TripIntelAI. Have a great trip! 👋")
+            break
+        
+        if not query.strip():
+            print("Please enter a valid query.")
+            continue
+        
+        try:
+            # Process the query
+            result = await process_travel_query(query)
+            
+            # Handle results
+            if result.get("is_valid", False):
+                if "itinerary" in result:
+                    print("\n✨ Your personalized travel itinerary: ✨\n")
+                    print("-" * 80)
+                    print(result["itinerary"])
+                    print("-" * 80)
+                else:
+                    print("\n✅ Trip details validated successfully!")
+                    print("Please provide more information to complete your itinerary.")
+            else:
+                print("\n❌ Your travel query couldn't be processed:")
+                if result.get("error"):
+                    print(f"  - {result['error']}")
+                print("\nPlease try again with more specific information.")
+            
+        except Exception as e:
+            print(f"\n❌ An error occurred: {str(e)}")
+            print("Please try again with a different query.")
+        
+        # Ask if user wants to plan another trip
+        another = input("\nWould you like to plan another trip? (y/n): ")
+        if another.lower() not in ['y', 'yes']:
+            print("\nThank you for using TripIntelAI. Have a great trip! 👋")
+            break
+
 if __name__ == "__main__":
-    import uvicorn
-    import os
-    
-    # Get environment mode
-    dev_mode = os.getenv("DEV_MODE", "False").lower() in ("true", "1", "t")
-    port = int(os.getenv("PORT", "8000"))
-    
-    print("\n✨ Starting AI Travel Planner API Server ✨")
-    
-    # Check Amadeus API credentials
-    api_key = os.getenv("AMADEUS_API_KEY")
-    api_secret = os.getenv("AMADEUS_SECRET_KEY")
-    if not api_key or not api_secret:
-        print("\n⚠️  WARNING: Amadeus API credentials not found!")
-        print("- Set AMADEUS_API_KEY and AMADEUS_SECRET_KEY in your environment")
-        print("- Flight searches will use mock data until credentials are configured")
-    else:
-        print("- Amadeus API credentials found - using real flight data")
-    
-    print("- Using real flight data APIs (matching CLI behavior)")
-    print("- Supporting step-by-step workflow with flight selection")
-    print("- Ready to process travel planning requests")
-    
-    # Only use hot reload in development mode
-    if dev_mode:
-        print(f"- Running in DEVELOPMENT mode with hot reload on port {port}")
-        uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
-    else:
-        print("- Running in production mode")
-        uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    # Run the main function
+    asyncio.run(main())
