@@ -9,21 +9,43 @@ async def test_trip_planner():
     # Create graph instance
     graph = TripPlannerGraph()
     
-    # Test query
-    query = "I want to plan a trip to Paris for 2 people to May 20, 2024"
+    # Test query with more specific details
+    query = "I want to plan a 3-day trip to Paris for 2 people from May 20, 2024 to May 22, 2024. We're interested in museums, historical sites, and local cuisine. Budget is around $2000 per person."
     print(f"\nTest Query: {query}")
     
-    # Initialize state
+    # Initialize state with all required fields
     state = {
         "query": query,
-        "metadata": {},
+        "raw_query": query,
+        "metadata": {
+            "destination": "Paris, France",
+            "start_date": "2024-05-20",
+            "end_date": "2024-05-22",
+            "duration": 3,
+            "travelers": 2,
+            "budget_per_person": 2000,
+            "preferences": ["museums", "historical sites", "local cuisine"]
+        },
         "is_valid": False,
         "next_question": None,
         "error": None,
         "thought": None,
         "action": None,
         "action_input": None,
-        "observation": None
+        "observation": None,
+        "current_day": 1,
+        "total_days": 3,
+        "nodes_to_call": [],
+        "flights": [],
+        "places": [],
+        "restaurants": [],
+        "hotel": {},
+        "budget": {},
+        "route": {},
+        "daily_itineraries": [],
+        "visited_places": set(),
+        "visited_restaurants": set(),
+        "final_itinerary": None
     }
     
     try:
@@ -54,13 +76,37 @@ async def test_trip_planner():
                 for key, value in metadata_dict.items():
                     print(f"- {key}: {value}")
         
-        if result.get('thought'):
-            print(f"\nThought: {result['thought']}")
+        # Print daily itineraries
+        if result.get('daily_itineraries'):
+            print("\nDaily Itineraries:")
+            for i, day in enumerate(result['daily_itineraries'], 1):
+                print(f"\nDay {i}:")
+                print("-" * 30)
+                for activity in day.get('activities', []):
+                    print(f"- {activity.get('time')}: {activity.get('name')}")
+                    print(f"  Duration: {activity.get('duration')}")
+                    print(f"  Location: {activity.get('location')}")
+                print(f"Total cost for day: ${day.get('total_cost', 0)}")
         
-        if result.get('action'):
-            print(f"Action: {result['action']}")
-            if result.get('action_input'):
-                print(f"Action Input: {result['action_input']}")
+        # Print final itinerary summary
+        if result.get('final_itinerary'):
+            print("\nFinal Itinerary Summary:")
+            print("-" * 50)
+            print(f"Total Days: {result['final_itinerary'].get('total_days')}")
+            print(f"Total Cost: ${result['final_itinerary'].get('total_cost')}")
+            print(f"Unique Places Visited: {result['final_itinerary'].get('unique_places_visited')}")
+            print(f"Unique Restaurants Visited: {result['final_itinerary'].get('unique_restaurants_visited')}")
+        
+        # Print visited places tracking
+        if result.get('visited_places'):
+            print("\nVisited Places:")
+            for place in result['visited_places']:
+                print(f"- {place}")
+        
+        if result.get('visited_restaurants'):
+            print("\nVisited Restaurants:")
+            for restaurant in result['visited_restaurants']:
+                print(f"- {restaurant}")
         
         print("-" * 50)
         

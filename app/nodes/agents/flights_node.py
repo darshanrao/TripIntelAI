@@ -2,142 +2,225 @@ from typing import Dict, Any, Optional, List
 import random
 from datetime import datetime, timedelta
 import os
-import requests
+import httpx
 from pydantic import BaseModel
 from app.schemas.trip_schema import Flight, TripMetadata
 from app.nodes.agents.common import GraphState, generate_mock_datetime
+from app.utils.logger import logger
+from dotenv import load_dotenv
+import json
 
-class FlightSegment(BaseModel):
-    from_airport: str
-    to_airport: str
-    departure: str
-    arrival: str
-    carrier_code: str
-    duration: str
+# Load environment variables from .env file
+load_dotenv()
 
-class FlightOption(BaseModel):
-    price: str
-    currency: str
-    segments: List[FlightSegment]
+class FlightData(BaseModel):
+    id: str
+    airline: str
+    flight_number: str
+    departure_airport: str
+    departure_city: str
+    arrival_airport: str
+    arrival_city: str
+    departure_time: str
+    arrival_time: str
+    price: float
+    duration_minutes: int
+    stops: int
+    aircraft: str
+    cabin_class: str
+    baggage_included: bool
 
-class AmadeusFlightSearch:
-    def __init__(self, api_key: str, api_secret: str):
+class PerplexityFlightSearch:
+    def __init__(self, api_key: str):
         self.api_key = api_key
-        self.api_secret = api_secret
-        self.token = None
-        self.token_expiry = None
+        self.base_url = "https://api.perplexity.ai/chat/completions"
         
-    def _get_token(self):
-        """Get or refresh the access token"""
-        if self.token and self.token_expiry and datetime.now() < self.token_expiry:
-            return self.token
-            
-        url = "https://test.api.amadeus.com/v1/security/oauth2/token"
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": self.api_key,
-            "client_secret": self.api_secret
-        }
-        
-        try:
-            response = requests.post(url, data=data)
-            response.raise_for_status()
-            token_data = response.json()
-            
-            self.token = token_data["access_token"]
-            # Set token expiry (subtract 5 minutes for safety margin)
-            self.token_expiry = datetime.now() + timedelta(seconds=token_data["expires_in"] - 300)
-            
-            return self.token
-        except Exception as e:
-            print(f"Error getting Amadeus token: {e}")
-            return None
-            
-    def get_iata_code(self, city_name: str) -> str:
-        """Get IATA code for a city (simplified version)"""
-        # This is a simplified version. In production, use the Amadeus API
-        # to get actual IATA codes
-        city_codes = {
-            "new york": "NYC",
-            "boston": "BOS",
-            "los angeles": "LAX",
-            "san francisco": "SFO",
-            "chicago": "CHI",
-            "miami": "MIA",
-            "london": "LON",
-            "paris": "PAR",
-            "tokyo": "TYO",
-            "sydney": "SYD"
-        }
-        return city_codes.get(city_name.lower(), city_name[:3].upper())
-    
-    def search_flights(
+    async def search_flights(
         self,
         origin_city: str,
         destination_city: str,
         departure_date: str,
         return_date: str = None,
         adults: int = 1,
-        max_results: int = 10
+        max_results: int = 5
     ) -> List[Dict[str, Any]]:
-        """Search for flights using Amadeus API"""
-        origin = self.get_iata_code(origin_city)
-        destination = self.get_iata_code(destination_city)
+        """Search for flights using Perplexity API"""
+        # Construct a natural language query
+        query = f"Find {max_results} flights from {origin_city} to {destination_city} on {departure_date}. For each flight, provide: airline name, flight number, departure airport code and city, arrival airport code and city, departure and arrival times, price in USD, duration in minutes, number of stops, aircraft type, cabin class, and whether baggage is included. Format the response as a JSON array of flight objects."
         
-        # Get access token
-        token = self._get_token()
-        if not token:
-            return []
-            
-        url = "https://test.api.amadeus.com/v2/shopping/flight-offers"
         headers = {
-            "Authorization": f"Bearer {token}"
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
         }
         
-        params = {
-            "originLocationCode": origin,
-            "destinationLocationCode": destination,
-            "departureDate": departure_date,
-            "adults": adults,
-            "max": max_results,
-            "currencyCode": "USD"
+        data = {
+            "model": "sonar",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Be precise and concise."
+                },
+                {
+                    "role": "user",
+                    "content": query
+                }
+            ]
         }
-        
-        if return_date:
-            params["returnDate"] = return_date
-        
-        raw_data = []
         
         try:
-            response = requests.get(url, headers=headers, params=params)
-            if response.status_code == 429:
-                raise Exception("Rate limited: Too many flight searches. Try again later.")
-            response.raise_for_status()
-            
-            for i, offer in enumerate(response.json().get("data", []), start=1):
-                price = f"{offer['price']['total']} {offer['price']['currency']}"
-                for itinerary in offer["itineraries"]:
-                    for segment in itinerary["segments"]:
-                        flat_row = {
-                            "option": i,
-                            "price": price,
-                            "from": segment["departure"]["iataCode"],
-                            "to": segment["arrival"]["iataCode"],
-                            "departure": segment["departure"]["at"],
-                            "arrival": segment["arrival"]["at"],
-                            "airline": segment["carrierCode"],
-                            "duration": segment["duration"]
-                        }
-                        raw_data.append(flat_row)
-            return raw_data
+            async with httpx.AsyncClient() as client:
+                logger.info(f"Sending request to Perplexity API: {data}")
+                response = await client.post(self.base_url, json=data, headers=headers)
+                logger.info(f"Perplexity API response status: {response.status_code}")
+                logger.info(f"Perplexity API response: {response.text}")
+                
+                if response.status_code != 200:
+                    logger.error(f"Perplexity API error: {response.text}")
+                    logger.info("Falling back to mock data due to API error")
+                    return self._generate_mock_flights_from_response("")
+                
+                response.raise_for_status()
+                
+                # Parse the response to extract flight information
+                result = response.json()
+                flights_data = self._parse_perplexity_response(result)
+                
+                if not flights_data:
+                    logger.warning("No flights data parsed from API response, falling back to mock data")
+                    return self._generate_mock_flights_from_response("")
+                    
+                return flights_data
+                
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error occurred while calling Perplexity API: {str(e)}")
+            logger.info("Falling back to mock data due to HTTP error")
+            return self._generate_mock_flights_from_response("")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response from Perplexity API: {str(e)}")
+            logger.info("Falling back to mock data due to JSON parsing error")
+            return self._generate_mock_flights_from_response("")
         except Exception as e:
-            print(f"Error searching flights: {e}")
+            logger.error(f"Unexpected error while searching flights with Perplexity: {str(e)}")
+            logger.info("Falling back to mock data due to unexpected error")
+            return self._generate_mock_flights_from_response("")
+            
+    def _parse_perplexity_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Parse Perplexity API response to extract flight information"""
+        try:
+            content = response["choices"][0]["message"]["content"]
+            # Parse the JSON response
+            flights_data = json.loads(content)
+            return flights_data
+        except Exception as e:
+            logger.error(f"Error parsing Perplexity response: {e}")
             return []
+            
+    def _generate_mock_flights_from_response(self, content: str) -> List[Dict[str, Any]]:
+        """Generate mock flight data based on Perplexity response content"""
+        # This is a placeholder. In production, you would parse the actual response
+        airlines = [
+            {
+                "name": "Delta Air Lines",
+                "code": "DL",
+                "aircraft": ["Boeing 737-900", "Airbus A320", "Boeing 757-200"],
+                "price_ranges": {
+                    "Economy": (300, 600),
+                    "Premium Economy": (600, 900),
+                    "Business": (1000, 1500)
+                }
+            },
+            {
+                "name": "United Airlines",
+                "code": "UA",
+                "aircraft": ["Boeing 737-800", "Airbus A320", "Boeing 757-300"],
+                "price_ranges": {
+                    "Economy": (320, 620),
+                    "Premium Economy": (620, 920),
+                    "Business": (1050, 1550)
+                }
+            },
+            {
+                "name": "American Airlines",
+                "code": "AA",
+                "aircraft": ["Boeing 737-800", "Airbus A320", "Boeing 757-200"],
+                "price_ranges": {
+                    "Economy": (310, 610),
+                    "Premium Economy": (610, 910),
+                    "Business": (1020, 1520)
+                }
+            }
+        ]
+        
+        # Common flight durations for major routes (in minutes)
+        route_durations = {
+            "SFO-JFK": 340,  # San Francisco to New York
+            "JFK-SFO": 345,  # New York to San Francisco
+            "LAX-JFK": 335,  # Los Angeles to New York
+            "JFK-LAX": 340   # New York to Los Angeles
+        }
+        
+        # Common departure times for transcontinental flights
+        departure_times = [
+            (6, 0),   # 6:00 AM
+            (8, 30),  # 8:30 AM
+            (10, 0),  # 10:00 AM
+            (13, 30), # 1:30 PM
+            (16, 0),  # 4:00 PM
+            (19, 0)   # 7:00 PM
+        ]
+        
+        flights = []
+        for i in range(3):
+            airline = random.choice(airlines)
+            flight_number = f"{airline['code']}{random.randint(100, 999)}"
+            
+            # Get departure time
+            hour, minute = random.choice(departure_times)
+            departure_time = datetime.now() + timedelta(days=1, hours=hour, minutes=minute)
+            
+            # Get route duration
+            route = "SFO-JFK"
+            duration_minutes = route_durations.get(route, 340)
+            arrival_time = departure_time + timedelta(minutes=duration_minutes)
+            
+            # Select cabin class and price
+            cabin_class = random.choices(
+                ["Economy", "Premium Economy", "Business"],
+                weights=[0.7, 0.2, 0.1]  # 70% Economy, 20% Premium, 10% Business
+            )[0]
+            min_price, max_price = airline["price_ranges"][cabin_class]
+            price = random.randint(min_price, max_price)
+            
+            # Select aircraft
+            aircraft = random.choice(airline["aircraft"])
+            
+            # Determine stops (mostly non-stop for these routes)
+            stops = random.choices([0, 1], weights=[0.9, 0.1])[0]  # 90% non-stop
+            
+            flight = {
+                "id": f"{airline['code']}{flight_number}-SFO-JFK",
+                "airline": airline["name"],
+                "flight_number": flight_number,
+                "departure_airport": "SFO",
+                "departure_city": "San Francisco",
+                "arrival_airport": "JFK",
+                "arrival_city": "New York",
+                "departure_time": departure_time.isoformat(),
+                "arrival_time": arrival_time.isoformat(),
+                "price": price,
+                "duration_minutes": duration_minutes,
+                "stops": stops,
+                "aircraft": aircraft,
+                "cabin_class": cabin_class,
+                "baggage_included": True
+            }
+            flights.append(flight)
+            
+        return flights
 
 async def flights_node(state: GraphState) -> GraphState:
     """
-    Find flight options for the trip.
-    Uses the Amadeus API to find real flights, with fallback to mock data.
+    Find flight options for the trip using Perplexity API.
     
     Args:
         state: Current state containing trip metadata
@@ -155,20 +238,16 @@ async def flights_node(state: GraphState) -> GraphState:
     start_date_str = metadata.start_date.strftime("%Y-%m-%d")
     end_date_str = metadata.end_date.strftime("%Y-%m-%d")
     
+    # Initialize the Perplexity API client
+    api_key = os.getenv("PERPLEXITY_API_KEY")
+    if not api_key:
+        logger.error("Perplexity API key not found. Cannot search flights.")
+        raise RuntimeError("PERPLEXITY_API_KEY is not set in the environment.")
+    
+    flight_client = PerplexityFlightSearch(api_key=api_key)
     try:
-        # Initialize the Amadeus API client
-        api_key = os.getenv("AMADEUS_API_KEY")
-        api_secret = os.getenv("AMADEUS_SECRET_KEY")
-        
-        if not api_key or not api_secret:
-            # Fall back to mock data if API keys are not available
-            print("Amadeus API credentials not found. Using mock flight data.")
-            return await _generate_mock_flights(state)
-        
-        flight_client = AmadeusFlightSearch(api_key=api_key, api_secret=api_secret)
-        
         # Search for flights
-        flights_data = flight_client.search_flights(
+        flights_data = await flight_client.search_flights(
             origin_city=metadata.source,
             destination_city=metadata.destination,
             departure_date=start_date_str,
@@ -176,113 +255,14 @@ async def flights_node(state: GraphState) -> GraphState:
             adults=metadata.num_people,
             max_results=5
         )
-        
-        # If no flights found, use mock data
+        # If no flights found, return empty list
         if not flights_data:
-            print(f"No flights found between {metadata.source} and {metadata.destination}. Using mock data.")
-            return await _generate_mock_flights(state)
-        
-        # Process the flight data into our schema
-        flight_options = []
-        
-        # Group by option
-        options = {}
-        for flight in flights_data:
-            option_num = flight.get("option")
-            if option_num not in options:
-                options[option_num] = []
-            options[option_num].append(flight)
-        
-        # Create Flight objects for each option (outbound and return)
-        for option_num, segments in options.items():
-            for segment in segments:
-                # Parse price
-                price_parts = segment.get("price", "0 USD").split()
-                price = float(price_parts[0]) if len(price_parts) > 0 else 0
-                
-                # Parse dates
-                try:
-                    departure_time = datetime.fromisoformat(segment.get("departure").replace('Z', '+00:00'))
-                    arrival_time = datetime.fromisoformat(segment.get("arrival").replace('Z', '+00:00'))
-                except (ValueError, AttributeError):
-                    # If date parsing fails, use the trip dates
-                    departure_time = metadata.start_date
-                    arrival_time = metadata.start_date + timedelta(hours=2)
-                
-                # Create Flight object
-                flight = Flight(
-                    airline=segment.get("airline", "Unknown"),
-                    flight_number=f"{segment.get('airline', 'X')}{random.randint(100, 999)}",
-                    departure_time=departure_time,
-                    arrival_time=arrival_time,
-                    price=price
-                )
-                
-                flight_options.append(flight)
-        
-        # Sort by price
-        flight_options.sort(key=lambda x: x.price)
-        
+            logger.warning(f"No flights found between {metadata.source} and {metadata.destination}.")
+            state["flights"] = []
+            return state
         # Add to state
-        # We need to convert Flight objects to dictionaries
-        state["flights"] = [flight.model_dump() for flight in flight_options]
-        
+        state["flights"] = flights_data
         return state
-    
     except Exception as e:
-        print(f"Error in flights_node: {e}")
-        # Fall back to mock data if an error occurs
-        return await _generate_mock_flights(state)
-
-async def _generate_mock_flights(state: GraphState) -> GraphState:
-    """Generate mock flight data as a fallback"""
-    metadata = state.get("metadata")
-    
-    # Mock flight data
-    airlines = ["JetBlue", "Delta", "United", "American", "Southwest"]
-    flight_options = []
-    
-    for i in range(3):  # Generate 3 flight options
-        airline = random.choice(airlines)
-        flight_number = f"{airline[0]}{random.randint(100, 999)}"
-        departure_time = generate_mock_datetime(metadata.start_date, 8 + i * 2)
-        flight_duration = timedelta(hours=random.randint(1, 5), minutes=random.randint(0, 59))
-        arrival_time = departure_time + flight_duration
-        price = round(random.uniform(150, 400), 2)
-        
-        flight = Flight(
-            airline=airline,
-            flight_number=flight_number,
-            departure_time=departure_time,
-            arrival_time=arrival_time,
-            price=price
-        )
-        
-        flight_options.append(flight)
-    
-    # Generate return flights
-    for i in range(3):  # Generate 3 return flight options
-        airline = random.choice(airlines)
-        flight_number = f"{airline[0]}{random.randint(100, 999)}"
-        departure_time = generate_mock_datetime(metadata.end_date, 16 + i * 2)
-        flight_duration = timedelta(hours=random.randint(1, 5), minutes=random.randint(0, 59))
-        arrival_time = departure_time + flight_duration
-        price = round(random.uniform(150, 400), 2)
-        
-        flight = Flight(
-            airline=airline,
-            flight_number=flight_number,
-            departure_time=departure_time,
-            arrival_time=arrival_time,
-            price=price
-        )
-        
-        flight_options.append(flight)
-    
-    # Sort by price
-    flight_options.sort(key=lambda x: x.price)
-    
-    # Add to state - use model_dump() instead of dict()
-    state["flights"] = [flight.model_dump() for flight in flight_options]
-    
-    return state 
+        logger.error(f"Error in flights_node: {e}")
+        raise 

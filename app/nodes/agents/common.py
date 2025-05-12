@@ -86,4 +86,57 @@ def get_place_photo_url(photo_reference, max_width=400):
         print("GOOGLE_PLACES_API_KEY environment variable not set")
         return None
         
-    return f"https://maps.googleapis.com/maps/api/place/photo?maxwidth={max_width}&photoreference={photo_reference}&key={api_key}" 
+    return f"https://maps.googleapis.com/maps/api/place/photo?maxwidth={max_width}&photoreference={photo_reference}&key={api_key}"
+
+def get_places(latitude, longitude, radius=25000, place_type=None, keyword=None):
+    """
+    Find places using Google Places API
+    
+    Parameters:
+    - latitude: float - Latitude coordinate
+    - longitude: float - Longitude coordinate
+    - radius: int - Search radius in meters (default: 25000, max 50000)
+    - place_type: str - Type of place to search for (e.g., "tourist_attraction", "museum")
+    - keyword: str - Additional search keyword
+    
+    Returns:
+    - list of place results
+    """
+    # Ensure radius doesn't exceed API limits
+    if radius > 50000:
+        print(f"Warning: Radius reduced from {radius}m to 50000m (API maximum)")
+        radius = 50000
+    
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    
+    # Base parameters
+    params = {
+        "location": f"{latitude},{longitude}",
+        "radius": radius,
+        "key": os.environ.get("GOOGLE_PLACES_API_KEY")
+    }
+    
+    # Add place type if provided
+    if place_type:
+        params["type"] = place_type
+    
+    # Add keyword if provided
+    if keyword:
+        params["keyword"] = keyword
+    
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        
+        if data.get('status') != 'OK':
+            print(f"Error fetching places: {data.get('status')}")
+            return []
+            
+        # Sort by rating (highest first)
+        results = data.get('results', [])
+        results.sort(key=lambda x: x.get('rating', 0), reverse=True)
+        
+        return results
+    except Exception as e:
+        print(f"Error fetching places: {e}")
+        return [] 
