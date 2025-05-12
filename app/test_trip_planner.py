@@ -2,6 +2,19 @@ import asyncio
 from app.graph.trip_planner_graph import TripPlannerGraph
 from app.utils.logger import logger
 
+async def verify_agent_data(agent_name: str, data: any) -> bool:
+    """Verify the data returned by an agent."""
+    if not data:
+        return False
+    
+    if isinstance(data, list):
+        return len(data) > 0
+    elif isinstance(data, dict):
+        return len(data.keys()) > 0
+    elif isinstance(data, set):
+        return len(data) > 0
+    return True
+
 async def test_trip_planner():
     """Test the trip planner with a simple travel query."""
     print("\n=== Testing Trip Planner ===")
@@ -26,7 +39,7 @@ async def test_trip_planner():
             "budget_per_person": 2000,
             "preferences": ["museums", "historical sites", "local cuisine"]
         },
-        "is_valid": False,
+        "is_valid": True,  # Set to True since we're providing complete metadata
         "next_question": None,
         "error": None,
         "thought": None,
@@ -52,6 +65,144 @@ async def test_trip_planner():
         # Process the query
         print("\nProcessing query...")
         result = await graph.process(state)
+        
+        # Verify planner node execution
+        print("\nVerifying Planner Node:")
+        print("-" * 50)
+        if result.get('nodes_to_call'):
+            print("Planner node successfully called and returned nodes to call:")
+            for node in result['nodes_to_call']:
+                print(f"- {node}")
+            
+            # Verify that all necessary nodes are called
+            expected_nodes = {'flights', 'places', 'hotel', 'budget'}
+            called_nodes = set(result['nodes_to_call'])
+            missing_nodes = expected_nodes - called_nodes
+            if missing_nodes:
+                print(f"\nWarning: Missing expected nodes: {missing_nodes}")
+            else:
+                print("\nAll expected nodes are included in the plan")
+        else:
+            print("Warning: Planner node did not return any nodes to call")
+        
+        # Verify specialized agents execution
+        print("\nVerifying Specialized Agents:")
+        print("-" * 50)
+        
+        # Check flights agent
+        if result.get('flights'):
+            print("\nFlights agent executed successfully")
+            print(f"Found {len(result['flights'])} flight options")
+            # Verify flight data structure
+            if len(result['flights']) > 0:
+                flight = result['flights'][0]
+                required_fields = {'airline', 'flight_number', 'departure_airport', 'arrival_airport', 'price'}
+                missing_fields = required_fields - set(flight.keys())
+                if missing_fields:
+                    print(f"Warning: Flight data missing required fields: {missing_fields}")
+                else:
+                    print("Flight data structure is valid")
+        else:
+            print("\nWarning: Flights agent did not return any results")
+        
+        # Check places agent
+        if result.get('places'):
+            print("\nPlaces agent executed successfully")
+            print(f"Found {len(result['places'])} places to visit")
+            # Verify places data structure
+            if len(result['places']) > 0:
+                place = result['places'][0]
+                required_fields = {'name', 'location', 'type', 'rating'}
+                missing_fields = required_fields - set(place.keys())
+                if missing_fields:
+                    print(f"Warning: Place data missing required fields: {missing_fields}")
+                else:
+                    print("Place data structure is valid")
+        else:
+            print("\nWarning: Places agent did not return any results")
+        
+        # Check restaurants
+        if result.get('restaurants'):
+            print("\nRestaurants agent executed successfully")
+            print(f"Found {len(result['restaurants'])} restaurants")
+            # Verify restaurant data structure
+            if len(result['restaurants']) > 0:
+                restaurant = result['restaurants'][0]
+                required_fields = {'name', 'cuisine', 'price_range', 'rating'}
+                missing_fields = required_fields - set(restaurant.keys())
+                if missing_fields:
+                    print(f"Warning: Restaurant data missing required fields: {missing_fields}")
+                else:
+                    print("Restaurant data structure is valid")
+        else:
+            print("\nWarning: Restaurants agent did not return any results")
+        
+        # Check hotel
+        if result.get('hotel'):
+            print("\nHotel agent executed successfully")
+            print("Hotel information found")
+            # Verify hotel data structure
+            required_fields = {'name', 'location', 'price_per_night', 'rating', 'amenities'}
+            missing_fields = required_fields - set(result['hotel'].keys())
+            if missing_fields:
+                print(f"Warning: Hotel data missing required fields: {missing_fields}")
+            else:
+                print("Hotel data structure is valid")
+        else:
+            print("\nWarning: Hotel agent did not return any results")
+        
+        # Check budget
+        if result.get('budget'):
+            print("\nBudget agent executed successfully")
+            print("Budget information found")
+            # Verify budget data structure
+            required_fields = {'total_budget', 'flights_cost', 'accommodation_cost', 'activities_cost', 'food_cost'}
+            missing_fields = required_fields - set(result['budget'].keys())
+            if missing_fields:
+                print(f"Warning: Budget data missing required fields: {missing_fields}")
+            else:
+                print("Budget data structure is valid")
+        else:
+            print("\nWarning: Budget agent did not return any results")
+        
+        # Check route
+        if result.get('route'):
+            print("\nRoute agent executed successfully")
+            print("Route information found")
+            # Verify route data structure
+            required_fields = {'total_distance', 'estimated_time', 'waypoints'}
+            missing_fields = required_fields - set(result['route'].keys())
+            if missing_fields:
+                print(f"Warning: Route data missing required fields: {missing_fields}")
+            else:
+                print("Route data structure is valid")
+        else:
+            print("\nWarning: Route agent did not return any results")
+        
+        # Verify data consistency
+        print("\nVerifying Data Consistency:")
+        print("-" * 50)
+        
+        # Check if visited places match places in itineraries
+        if result.get('visited_places') and result.get('daily_itineraries'):
+            itinerary_places = set()
+            for day in result['daily_itineraries']:
+                for activity in day.get('activities', []):
+                    if 'location' in activity:
+                        itinerary_places.add(activity['location'])
+            
+            missing_places = itinerary_places - result['visited_places']
+            if missing_places:
+                print(f"Warning: Places in itineraries not tracked in visited_places: {missing_places}")
+            else:
+                print("Visited places tracking is consistent with itineraries")
+        
+        # Check if daily itineraries match total days
+        if result.get('daily_itineraries'):
+            if len(result['daily_itineraries']) != result.get('total_days', 0):
+                print(f"Warning: Number of daily itineraries ({len(result['daily_itineraries'])}) doesn't match total days ({result.get('total_days', 0)})")
+            else:
+                print("Daily itineraries match total days")
         
         # Print results
         print("\nResults:")

@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Literal, Optional, TypedDict
 from langchain_anthropic import ChatAnthropic
 from app.schemas.trip_schema import TripMetadata
 
-PLANNER_PROMPT = """You are a trip planning assistant. Based on the user's query and travel intent, decide which of the following travel planning nodes to call:
+AGENT_SELECTOR_PROMPT = """You are a trip planning assistant. Based on the user's query and travel intent, decide which of the following travel planning nodes to call:
 
 Available nodes:
 - "flights": Find flight options for the trip
@@ -38,7 +38,7 @@ class GraphState(TypedDict):
     error: Optional[str]
     nodes_to_call: List[str]
 
-async def planner_node(state: GraphState) -> GraphState:
+async def agent_selector_node(state: GraphState) -> GraphState:
     """
     Decide which nodes to call based on user intent.
     
@@ -71,7 +71,7 @@ async def planner_node(state: GraphState) -> GraphState:
     
     # Use Claude to decide which nodes to call
     response = await llm.ainvoke(
-        PLANNER_PROMPT.format(
+        AGENT_SELECTOR_PROMPT.format(
             query=user_query,
             metadata=metadata.dict()
         )
@@ -100,7 +100,7 @@ async def planner_node(state: GraphState) -> GraphState:
         state["nodes_to_call"] = nodes_to_call
         
     except Exception as e:
-        state["error"] = f"Failed to parse planner output: {str(e)}"
+        state["error"] = f"Failed to parse agent selector output: {str(e)}"
         state["nodes_to_call"] = ["flights", "hotel", "places", "budget"]  # Default fallback
     
     return state 

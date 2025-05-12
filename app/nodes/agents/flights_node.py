@@ -32,8 +32,10 @@ class FlightData(BaseModel):
 
 class PerplexityFlightSearch:
     def __init__(self, api_key: str):
-        self.api_key = api_key
+        # Remove any quotes or whitespace from the API key
+        self.api_key = api_key.strip().strip('"\'')
         self.base_url = "https://api.perplexity.ai/chat/completions"
+        logger.info(f"Initialized PerplexityFlightSearch with API key: {self.api_key[:8]}...")
         
     async def search_flights(
         self,
@@ -68,52 +70,53 @@ class PerplexityFlightSearch:
         }
         
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:  # Added timeout
                 logger.info(f"Sending request to Perplexity API: {data}")
-                response = await client.post(self.base_url, json=data, headers=headers)
+                response = await client.post(
+                    self.base_url,
+                    json=data,
+                    headers=headers,
+                    timeout=30.0  # Added timeout
+                )
                 logger.info(f"Perplexity API response status: {response.status_code}")
                 logger.info(f"Perplexity API response: {response.text}")
                 
                 if response.status_code != 200:
-                    logger.error(f"Perplexity API error: {response.text}")
+                    logger.error(f"Perplexity API error: Status {response.status_code}, Response: {response.text}")
                     logger.info("Falling back to mock data due to API error")
                     return self._generate_mock_flights_from_response("")
                 
-                response.raise_for_status()
-                
                 # Parse the response to extract flight information
                 result = response.json()
-                flights_data = self._parse_perplexity_response(result)
+                content = result["choices"][0]["message"]["content"]
                 
-                if not flights_data:
-                    logger.warning("No flights data parsed from API response, falling back to mock data")
+                # Extract JSON array from the response content
+                try:
+                    # Find the JSON array in the response
+                    json_start = content.find("[")
+                    json_end = content.rfind("]") + 1
+                    if json_start >= 0 and json_end > json_start:
+                        json_str = content[json_start:json_end]
+                        flights_data = json.loads(json_str)
+                        return flights_data
+                    else:
+                        logger.warning("No JSON array found in response content")
+                        return self._generate_mock_flights_from_response("")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON from response content: {e}")
                     return self._generate_mock_flights_from_response("")
-                    
-                return flights_data
                 
         except httpx.HTTPError as e:
             logger.error(f"HTTP error occurred while calling Perplexity API: {str(e)}")
+            logger.error(f"Request URL: {self.base_url}")
+            logger.error(f"Request headers: {headers}")
+            logger.error(f"Request data: {data}")
             logger.info("Falling back to mock data due to HTTP error")
-            return self._generate_mock_flights_from_response("")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response from Perplexity API: {str(e)}")
-            logger.info("Falling back to mock data due to JSON parsing error")
             return self._generate_mock_flights_from_response("")
         except Exception as e:
             logger.error(f"Unexpected error while searching flights with Perplexity: {str(e)}")
             logger.info("Falling back to mock data due to unexpected error")
             return self._generate_mock_flights_from_response("")
-            
-    def _parse_perplexity_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Parse Perplexity API response to extract flight information"""
-        try:
-            content = response["choices"][0]["message"]["content"]
-            # Parse the JSON response
-            flights_data = json.loads(content)
-            return flights_data
-        except Exception as e:
-            logger.error(f"Error parsing Perplexity response: {e}")
-            return []
             
     def _generate_mock_flights_from_response(self, content: str) -> List[Dict[str, Any]]:
         """Generate mock flight data based on Perplexity response content"""
@@ -221,6 +224,7 @@ class PerplexityFlightSearch:
 async def flights_node(state: GraphState) -> GraphState:
     """
     Find flight options for the trip using Perplexity API.
+    Performs separate searches for arrival and departure flights.
     
     Args:
         state: Current state containing trip metadata
@@ -238,31 +242,58 @@ async def flights_node(state: GraphState) -> GraphState:
     start_date_str = metadata.start_date.strftime("%Y-%m-%d")
     end_date_str = metadata.end_date.strftime("%Y-%m-%d")
     
-    # Initialize the Perplexity API client
+    # Check if the Perplexity API key is loaded
     api_key = os.getenv("PERPLEXITY_API_KEY")
     if not api_key:
         logger.error("Perplexity API key not found. Cannot search flights.")
         raise RuntimeError("PERPLEXITY_API_KEY is not set in the environment.")
+    else:
+        logger.info("Perplexity API key loaded successfully.")
     
     flight_client = PerplexityFlightSearch(api_key=api_key)
+    all_flights = []
+    
     try:
-        # Search for flights
-        flights_data = await flight_client.search_flights(
+        # Search for arrival flights (source to destination)
+        logger.info(f"Searching for arrival flights from {metadata.source} to {metadata.destination}")
+        arrival_flights = await flight_client.search_flights(
             origin_city=metadata.source,
             destination_city=metadata.destination,
             departure_date=start_date_str,
-            return_date=end_date_str,
             adults=metadata.num_people,
             max_results=5
         )
-        # If no flights found, return empty list
-        if not flights_data:
-            logger.warning(f"No flights found between {metadata.source} and {metadata.destination}.")
-            state["flights"] = []
-            return state
-        # Add to state
-        state["flights"] = flights_data
+        
+        if arrival_flights:
+            # Add flight type to each flight
+            for flight in arrival_flights:
+                flight["flight_type"] = "arrival"
+            all_flights.extend(arrival_flights)
+        else:
+            logger.warning(f"No arrival flights found between {metadata.source} and {metadata.destination}.")
+        
+        # Search for departure flights (destination to source)
+        logger.info(f"Searching for departure flights from {metadata.destination} to {metadata.source}")
+        departure_flights = await flight_client.search_flights(
+            origin_city=metadata.destination,
+            destination_city=metadata.source,
+            departure_date=end_date_str,
+            adults=metadata.num_people,
+            max_results=5
+        )
+        
+        if departure_flights:
+            # Add flight type to each flight
+            for flight in departure_flights:
+                flight["flight_type"] = "departure"
+            all_flights.extend(departure_flights)
+        else:
+            logger.warning(f"No departure flights found between {metadata.destination} and {metadata.source}.")
+        
+        # Add all flights to state
+        state["flights"] = all_flights
         return state
+        
     except Exception as e:
         logger.error(f"Error in flights_node: {e}")
         raise 

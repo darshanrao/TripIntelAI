@@ -3,12 +3,13 @@ from langgraph.graph import StateGraph
 from app.nodes.chat_input_node import chat_input_node
 from app.nodes.intent_parser_node import intent_parser_node
 from app.nodes.trip_validator_node import trip_validator_node, process_user_response
-from app.nodes.planner_node import planner_node
+from app.nodes.planner_node import agent_selector_node
 from app.nodes.agents.flights_node import flights_node
-from app.nodes.agents.places_node import places_node
+from app.nodes.agents.places_node import places_node, fetch_attractions, fetch_restaurants
 from app.nodes.agents.reviews_node import reviews_node
 from app.nodes.agents.budget_node import budget_node
 from app.nodes.agents.route_node import route_node
+from app.nodes.agents.itinerary_planner_node import itinerary_planner_node
 from app.utils.logger import logger
 
 class GraphState(TypedDict):
@@ -62,6 +63,7 @@ class TripPlannerGraph:
         workflow.add_node("chat_input", chat_input_node)
         workflow.add_node("intent_parser", intent_parser_node)
         workflow.add_node("validator", trip_validator_node)
+        workflow.add_node("agent_selector", agent_selector_node)
         
         # Create an async wrapper for process_user_response
         async def process_response_wrapper(state):
@@ -88,7 +90,11 @@ class TripPlannerGraph:
         workflow.add_node("reviews_agent", reviews_node)
         workflow.add_node("budget_agent", budget_node)
         workflow.add_node("route_agent", route_node)
-        workflow.add_node("planner_agent", planner_node)
+        workflow.add_node("itinerary_planner", itinerary_planner_node)
+        
+        # Add fetch attractions and restaurants nodes
+        workflow.add_node("fetch_attractions", fetch_attractions)
+        workflow.add_node("fetch_restaurants", fetch_restaurants)
         
         # Add edges
         workflow.add_edge("chat_input", "intent_parser")
@@ -107,25 +113,47 @@ class TripPlannerGraph:
         # Add edge from process_response back to validator
         workflow.add_edge("process_response", "validator")
         
-        # Add sequential edges for initial data gathering
-        workflow.add_edge("flights_agent", "places_agent")
-        workflow.add_edge("places_agent", "reviews_agent")
-        workflow.add_edge("reviews_agent", "route_agent")
-        workflow.add_edge("route_agent", "budget_agent")
-        workflow.add_edge("budget_agent", "planner_agent")
+        # Add sequential edges for attractions and restaurants flow
+        workflow.add_edge("flights_agent", "fetch_attractions")  # First get attractions
+        workflow.add_edge("fetch_attractions", "fetch_restaurants")  # Then get restaurants
+        workflow.add_edge("fetch_restaurants", "reviews_agent")
+        workflow.add_edge("reviews_agent", "budget_agent")
         
-        # Add conditional edge from planner to either next day or final merge
+        # Add conditional edge from places_agent to either reviews_agent or itinerary_planner
         workflow.add_conditional_edges(
-            "planner_agent",
-            lambda x: "planner_agent" if x.get("current_day", 0) < x.get("total_days", 0) else "final_merge",
+            "places_agent",
+            lambda x: "reviews_agent" if x.get("place_type") == "attraction" else "itinerary_planner",
             {
-                "planner_agent": "planner_agent",
+                "reviews_agent": "reviews_agent",
+                "itinerary_planner": "itinerary_planner"
+            }
+        )
+        
+        # Add conditional edge from itinerary_planner to either places_agent (for next day) or final_merge
+        workflow.add_conditional_edges(
+            "itinerary_planner",
+            lambda x: "places_agent" if x.get("current_day", 0) < x.get("total_days", 0) else "final_merge",
+            {
+                "places_agent": "places_agent",
                 "final_merge": "final_merge"
             }
         )
         
         # Add final merge node (non-AI merge of all daily itineraries)
         async def final_merge(state):
+            # Get flights from the state
+            flights = state.get("flights", [])
+            arrival_flight = None
+            departure_flight = None
+            
+            if flights:
+                # Find arrival and departure flights by flight_type
+                for flight in flights:
+                    if flight.get("flight_type") == "arrival":
+                        arrival_flight = flight
+                    elif flight.get("flight_type") == "departure":
+                        departure_flight = flight
+            
             # Merge all daily itineraries into final itinerary
             final_itinerary = {
                 "trip_summary": state.get("metadata", {}),
@@ -133,7 +161,41 @@ class TripPlannerGraph:
                 "total_cost": sum(day.get("total_cost", 0) for day in state.get("daily_itineraries", [])),
                 "total_days": state.get("total_days", 0),
                 "unique_places_visited": len(state.get("visited_places", set())),
-                "unique_restaurants_visited": len(state.get("visited_restaurants", set()))
+                "unique_restaurants_visited": len(state.get("visited_restaurants", set())),
+                "arrival_flight": {
+                    "id": arrival_flight.get("id") if arrival_flight else None,
+                    "airline": arrival_flight.get("airline") if arrival_flight else None,
+                    "flight_number": arrival_flight.get("flight_number") if arrival_flight else None,
+                    "departure_airport": arrival_flight.get("departure_airport") if arrival_flight else None,
+                    "departure_city": arrival_flight.get("departure_city") if arrival_flight else None,
+                    "arrival_airport": arrival_flight.get("arrival_airport") if arrival_flight else None,
+                    "arrival_city": arrival_flight.get("arrival_city") if arrival_flight else None,
+                    "departure_time": arrival_flight.get("departure_time") if arrival_flight else None,
+                    "arrival_time": arrival_flight.get("arrival_time") if arrival_flight else None,
+                    "price": arrival_flight.get("price") if arrival_flight else None,
+                    "duration_minutes": arrival_flight.get("duration_minutes") if arrival_flight else None,
+                    "stops": arrival_flight.get("stops") if arrival_flight else None,
+                    "aircraft": arrival_flight.get("aircraft") if arrival_flight else None,
+                    "cabin_class": arrival_flight.get("cabin_class") if arrival_flight else None,
+                    "baggage_included": arrival_flight.get("baggage_included") if arrival_flight else None
+                },
+                "departure_flight": {
+                    "id": departure_flight.get("id") if departure_flight else None,
+                    "airline": departure_flight.get("airline") if departure_flight else None,
+                    "flight_number": departure_flight.get("flight_number") if departure_flight else None,
+                    "departure_airport": departure_flight.get("departure_airport") if departure_flight else None,
+                    "departure_city": departure_flight.get("departure_city") if departure_flight else None,
+                    "arrival_airport": departure_flight.get("arrival_airport") if departure_flight else None,
+                    "arrival_city": departure_flight.get("arrival_city") if departure_flight else None,
+                    "departure_time": departure_flight.get("departure_time") if departure_flight else None,
+                    "arrival_time": departure_flight.get("arrival_time") if departure_flight else None,
+                    "price": departure_flight.get("price") if departure_flight else None,
+                    "duration_minutes": departure_flight.get("duration_minutes") if departure_flight else None,
+                    "stops": departure_flight.get("stops") if departure_flight else None,
+                    "aircraft": departure_flight.get("aircraft") if departure_flight else None,
+                    "cabin_class": departure_flight.get("cabin_class") if departure_flight else None,
+                    "baggage_included": departure_flight.get("baggage_included") if departure_flight else None
+                }
             }
             state["final_itinerary"] = final_itinerary
             return state
