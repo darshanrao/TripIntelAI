@@ -1,0 +1,170 @@
+{
+  "trip_summary": {
+    "destination": "Paris, France",
+    "start_date": "2024-05-20",
+    "end_date": "2024-05-22",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2024-05-20",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Air France Flight AF011 from Los Angeles to Paris",
+          "time": "08:00",
+          "duration_minutes": 480,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check-in at Hôtel d'Orsay",
+          "time": "16:30",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Visit Eiffel Tower",
+          "time": "18:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "Avenue Gustave Eiffel, Paris",
+            "latitude": 48.85837009999999,
+            "longitude": 2.2944813
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Iconic and breathtaking views of Paris",
+              "Rich historical significance and architectural beauty",
+              "Excellent dining options at the tower's restaurants"
+            ],
+            "weaknesses": [
+              "Crowds and long wait times, especially during peak seasons",
+              "Expensive tickets and dining options"
+            ],
+            "summary": "The Eiffel Tower is a must-visit attraction in Paris, offering stunning views of the city and a rich historical experience. Visitors rave about the tower's iconic status and the romantic atmosphere it provides. However, many complain about the large crowds and long wait times, especially during peak seasons. The dining options at the tower are highly praised, but they can be quite expensive. Overall, the Eiffel Tower remains a top-rated destination with a strong positive sentiment among travelers."
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Shu",
+          "time": "20:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "8 Rue Suger, Paris",
+            "latitude": 48.85304559999999,
+            "longitude": 2.3422136
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Authentic and finely executed Japanese cuisine",
+              "Fresh ingredients used in dishes like kushiage, sushi, and sashimi",
+              "Unique dining experience in a 17th-century cellar with minimalist decor"
+            ],
+            "weaknesses": [
+              "Small entrance requires stooping, which may be inconvenient for some guests",
+              "Limited seating and no reservations available through some platforms"
+            ],
+            "summary": "Shu in Paris offers a unique dining experience with authentic Japanese cuisine, including kushiage, sushi, and sashimi, all made with fresh ingredients. The restaurant is located in a 17th-century cellar, providing a distinctive ambiance. It is praised for its minimalist decor and the quality of its dishes. However, the small entrance may pose a challenge for some visitors. Shu is highly rated on TripAdvisor, earning a Travelers’ Choice award and ranking well among Parisian restaurants. Despite its strengths, it has limited seating and does not offer reservations through all platforms, which can be a drawback for some potential diners."
+          }
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2024-05-21",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Air France Flight AF011 from Los Angeles to Paris",
+          "time": "08:00",
+          "duration_minutes": 480,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check-in at Hôtel d'Orsay",
+          "time": "16:30",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Visit Louvre Museum",
+          "time": "18:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "Paris",
+            "latitude": 48.8606111,
+            "longitude": 2.337644
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Rich historical significance and architectural beauty",
+              "Excellent collection of art and artifacts"
+            ],
+            "weaknesses": [
+              "Crowds and long wait times, especially during peak seasons",
+              "Large and can be overwhelming to navigate"
+            ],
+            "summary": "The Louvre Museum is a must-visit attraction in Paris, offering a rich cultural experience and an impressive collection of art and artifacts. Visitors rave about the museum's historical significance and architectural beauty, but many complain about the large crowds and long wait times, especially during peak seasons. Overall, the Louvre remains a top-rated destination with a strong positive sentiment among travelers."
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Le Georges",
+          "time": "20:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "du Centre Georges Pompidou, Place Georges Pompidou 6e étage, Paris",
+            "latitude": 48.8599858,
+            "longitude": 2.3519691
+          },
+          "review_insights": {
+            "sentiment": "neutral",
+            "strengths": [
+              "Unique dining experience with a view of the city",
+              "Upscale and modern atmosphere"
+            ],
+            "weaknesses": [
+              "Expensive prices",
+              "Mixed reviews on food quality and service"
+            ],
+            "summary": "Le Georges offers a unique dining experience with a view of Paris from the top of the Centre Pompidou. While some visitors praise the upscale and modern atmosphere, others find the prices too expensive and have mixed reviews on the food quality and service. Overall, the restaurant receives a neutral sentiment, with opinions divided on whether the experience is worth the cost."
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "Hôtel d'Orsay",
+      "rating": 4.8,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

@@ -75,6 +75,13 @@ IMPORTANT:
 2. For flights and hotel activities, keep the details object empty.
 3. Make sure to include appropriate activities for the time of day (morning, afternoon, evening).
 4. You MUST use the exact date provided in current_day_date for this day's itinerary.
+5. Ensure proper JSON formatting:
+   - Use double quotes for all strings
+   - Include commas between all array elements and object properties
+   - Do not include trailing commas
+   - Ensure all arrays and objects are properly closed
+   - Validate that the JSON is properly formatted before returning
+6. Return ONLY the JSON object, with no additional text or explanation.
 """
 
 class GraphState(TypedDict):
@@ -412,6 +419,31 @@ async def populate_activity_details(state: GraphState) -> GraphState:
         logger.error(f"Error populating activity details: {str(e)}")
         return state
 
+def clean_json_string(json_str: str) -> str:
+    """Clean and fix common JSON formatting issues."""
+    # Remove any text before the first { and after the last }
+    json_str = json_str[json_str.find('{'):json_str.rfind('}')+1]
+    
+    # Replace single quotes with double quotes
+    json_str = json_str.replace("'", '"')
+    
+    # Fix missing commas between array elements
+    json_str = re.sub(r'}\s*{', '},{', json_str)
+    json_str = re.sub(r']\s*{', '],{', json_str)
+    json_str = re.sub(r'"\s*{', '",{', json_str)
+    
+    # Remove trailing commas
+    json_str = re.sub(r',\s*}', '}', json_str)
+    json_str = re.sub(r',\s*]', ']', json_str)
+    
+    # Fix missing commas between object properties
+    json_str = re.sub(r'"\s*"', '","', json_str)
+    
+    # Fix missing quotes around property names
+    json_str = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', json_str)
+    
+    return json_str
+
 async def itinerary_planner_node(state: GraphState) -> GraphState:
     """
     Create a daily itinerary based on available options and constraints.
@@ -438,7 +470,7 @@ async def itinerary_planner_node(state: GraphState) -> GraphState:
         # Initialize LLM
         llm = ChatAnthropic(
             api_key=api_key,
-            model="claude-3-haiku-20240307",
+            model="claude-3-sonnet-20240229",
             temperature=0.2,
             max_tokens=1000
         )
@@ -512,12 +544,7 @@ async def itinerary_planner_node(state: GraphState) -> GraphState:
         # Method 3: Try to clean and fix common JSON issues
         if not daily_itinerary:
             try:
-                # Remove any text before the first { and after the last }
-                cleaned_content = content[content.find('{'):content.rfind('}')+1]
-                # Fix common JSON formatting issues
-                cleaned_content = cleaned_content.replace("'", '"')  # Replace single quotes
-                cleaned_content = re.sub(r',\s*}', '}', cleaned_content)  # Remove trailing commas
-                cleaned_content = re.sub(r',\s*]', ']', cleaned_content)  # Remove trailing commas in arrays
+                cleaned_content = clean_json_string(content)
                 daily_itinerary = json.loads(cleaned_content)
             except json.JSONDecodeError as e:
                 json_errors.append(f"Method 3 failed: {str(e)}")
