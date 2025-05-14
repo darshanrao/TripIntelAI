@@ -1,0 +1,168 @@
+{
+  "trip_summary": {
+    "destination": "Paris, France",
+    "start_date": "2024-05-20",
+    "end_date": "2024-05-22",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2025-05-16",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Flight Arrival",
+          "time": "16:01",
+          "duration_minutes": 340,
+          "details": {}
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Hotel Check-in",
+          "time": "17:00",
+          "duration_minutes": 60,
+          "details": {}
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Shu",
+          "time": "19:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "8 Rue Suger, Paris",
+            "latitude": 48.85304559999999,
+            "longitude": 2.3422136
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2025-05-17",
+      "activities": [
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "Breakfast at Hotel",
+          "time": "08:00",
+          "duration_minutes": 60,
+          "details": {}
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Louvre Museum",
+          "time": "09:30",
+          "duration_minutes": 180,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch at Jaja",
+          "time": "12:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "3 Rue Sainte-Croix de la Bretonnerie, Paris",
+            "latitude": 48.85751870000001,
+            "longitude": 2.35725
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "monument",
+          "title": "Arc de Triomphe",
+          "time": "14:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "park",
+          "title": "Bois de Vincennes",
+          "time": "16:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Auberge Nicolas Flamel",
+          "time": "19:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "51 Rue de Montmorency, Paris",
+            "latitude": 48.8635423,
+            "longitude": 2.3531534
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "Hôtel d'Orsay",
+      "rating": 4.8,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

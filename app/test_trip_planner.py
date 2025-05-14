@@ -46,19 +46,13 @@ async def test_trip_planner():
         "action": None,
         "action_input": None,
         "observation": None,
-        "current_day": 1,
-        "total_days": 3,
         "nodes_to_call": [],
         "flights": [],
         "places": [],
         "restaurants": [],
         "hotel": {},
         "budget": {},
-        "route": {},
-        "daily_itineraries": [],
-        "visited_places": set(),
-        "visited_restaurants": set(),
-        "final_itinerary": None
+        "route": {}
     }
     
     try:
@@ -96,7 +90,11 @@ async def test_trip_planner():
             # Verify flight data structure
             if len(result['flights']) > 0:
                 flight = result['flights'][0]
-                required_fields = {'airline', 'flight_number', 'departure_airport', 'arrival_airport', 'price'}
+                required_fields = {
+                    'id', 'airline', 'flight_number', 'departure_airport', 
+                    'departure_city', 'arrival_airport', 'arrival_city',
+                    'departure_time', 'arrival_time', 'price'
+                }
                 missing_fields = required_fields - set(flight.keys())
                 if missing_fields:
                     print(f"Warning: Flight data missing required fields: {missing_fields}")
@@ -156,7 +154,7 @@ async def test_trip_planner():
             print("\nBudget agent executed successfully")
             print("Budget information found")
             # Verify budget data structure
-            required_fields = {'total_budget', 'flights_cost', 'accommodation_cost', 'activities_cost', 'food_cost'}
+            required_fields = {'total', 'accommodation', 'food', 'activities', 'transportation'}
             missing_fields = required_fields - set(result['budget'].keys())
             if missing_fields:
                 print(f"Warning: Budget data missing required fields: {missing_fields}")
@@ -184,12 +182,12 @@ async def test_trip_planner():
         print("-" * 50)
         
         # Check if visited places match places in itineraries
-        if result.get('visited_places') and result.get('daily_itineraries'):
+        if result.get('visited_places') and result.get('final_itinerary'):
             itinerary_places = set()
-            for day in result['daily_itineraries']:
-                for activity in day.get('activities', []):
-                    if 'location' in activity:
-                        itinerary_places.add(activity['location'])
+            for day_key, day_data in result['final_itinerary'].get('daily_itinerary', {}).items():
+                for activity in day_data.get('activities', []):
+                    if activity.get('type') == 'attraction':
+                        itinerary_places.add(activity.get('title', ''))
             
             missing_places = itinerary_places - result['visited_places']
             if missing_places:
@@ -198,9 +196,10 @@ async def test_trip_planner():
                 print("Visited places tracking is consistent with itineraries")
         
         # Check if daily itineraries match total days
-        if result.get('daily_itineraries'):
-            if len(result['daily_itineraries']) != result.get('total_days', 0):
-                print(f"Warning: Number of daily itineraries ({len(result['daily_itineraries'])}) doesn't match total days ({result.get('total_days', 0)})")
+        if result.get('final_itinerary') and result.get('final_itinerary').get('daily_itinerary'):
+            daily_itinerary = result['final_itinerary']['daily_itinerary']
+            if len(daily_itinerary) != result.get('total_days', 0):
+                print(f"Warning: Number of daily itineraries ({len(daily_itinerary)}) doesn't match total days ({result.get('total_days', 0)})")
             else:
                 print("Daily itineraries match total days")
         
@@ -227,26 +226,60 @@ async def test_trip_planner():
                 for key, value in metadata_dict.items():
                     print(f"- {key}: {value}")
         
-        # Print daily itineraries
-        if result.get('daily_itineraries'):
-            print("\nDaily Itineraries:")
-            for i, day in enumerate(result['daily_itineraries'], 1):
-                print(f"\nDay {i}:")
-                print("-" * 30)
-                for activity in day.get('activities', []):
-                    print(f"- {activity.get('time')}: {activity.get('name')}")
-                    print(f"  Duration: {activity.get('duration')}")
-                    print(f"  Location: {activity.get('location')}")
-                print(f"Total cost for day: ${day.get('total_cost', 0)}")
-        
-        # Print final itinerary summary
+        # Print final itinerary
         if result.get('final_itinerary'):
-            print("\nFinal Itinerary Summary:")
-            print("-" * 50)
-            print(f"Total Days: {result['final_itinerary'].get('total_days')}")
-            print(f"Total Cost: ${result['final_itinerary'].get('total_cost')}")
-            print(f"Unique Places Visited: {result['final_itinerary'].get('unique_places_visited')}")
-            print(f"Unique Restaurants Visited: {result['final_itinerary'].get('unique_restaurants_visited')}")
+            print("\nFinal Itinerary:")
+            final_itinerary = result['final_itinerary']
+            
+            # Print trip summary
+            print("\nTrip Summary:")
+            print("-" * 30)
+            trip_summary = final_itinerary.get('trip_summary', {})
+            print(f"Destination: {trip_summary.get('destination', 'Unknown')}")
+            print(f"Start Date: {trip_summary.get('start_date', 'Unknown')}")
+            print(f"End Date: {trip_summary.get('end_date', 'Unknown')}")
+            print(f"Duration: {trip_summary.get('duration_days', 0)} days")
+            print(f"Total Budget: ${trip_summary.get('total_budget', 0)}")
+            
+            # Print daily itineraries
+            daily_itinerary = final_itinerary.get('daily_itinerary', {})
+            for day_num in range(1, result.get('total_days', 0) + 1):
+                day_key = f"day_{day_num}"
+                if day_key in daily_itinerary:
+                    day_data = daily_itinerary[day_key]
+                    print(f"\nDay {day_num} ({day_data.get('date', 'Unknown')}):")
+                    print("-" * 30)
+                    
+                    for activity in day_data.get('activities', []):
+                        print(f"- {activity.get('time')}: {activity.get('title')}")
+                        print(f"  Type: {activity.get('type')}")
+                        print(f"  Category: {activity.get('category')}")
+                        print(f"  Duration: {activity.get('duration_minutes')} minutes")
+            
+            # Print review highlights
+            review_highlights = final_itinerary.get('review_highlights', {})
+            if review_highlights:
+                print("\nReview Highlights:")
+                print("-" * 30)
+                
+                if review_highlights.get('hotel_review_summary'):
+                    hotel_review = review_highlights['hotel_review_summary']
+                    print(f"Hotel: {hotel_review.get('name', 'Unknown')} - Rating: {hotel_review.get('rating', 0)}")
+                
+                if review_highlights.get('overall'):
+                    print("\nOverall Highlights:")
+                    for highlight in review_highlights.get('overall', []):
+                        print(f"- {highlight}")
+                
+                if review_highlights.get('attractions'):
+                    print("\nAttraction Highlights:")
+                    for highlight in review_highlights.get('attractions', []):
+                        print(f"- {highlight}")
+                
+                if review_highlights.get('dining'):
+                    print("\nDining Highlights:")
+                    for highlight in review_highlights.get('dining', []):
+                        print(f"- {highlight}")
         
         # Print visited places tracking
         if result.get('visited_places'):
@@ -261,9 +294,111 @@ async def test_trip_planner():
         
         print("-" * 50)
         
+        # Save results to JSON file
+        try:
+            import json
+            from datetime import datetime
+            import re
+            from pathlib import Path
+            
+            # Custom JSON encoder to handle various object types
+            class EnhancedJSONEncoder(json.JSONEncoder):
+                def default(self, obj):
+                    # Handle datetime objects
+                    if isinstance(obj, datetime):
+                        return obj.isoformat()
+                    
+                    # Handle Pydantic models
+                    if hasattr(obj, 'dict'):
+                        return obj.dict()
+                    
+                    # Handle sets
+                    if isinstance(obj, set):
+                        return list(obj)
+                    
+                    # Handle any other non-serializable objects
+                    try:
+                        return str(obj)
+                    except:
+                        return None
+            
+            # Create safe filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_filename = re.sub(r'[^\w\-_.]', '_', f"itinerary_{timestamp}.json")
+            
+            # Ensure we're saving in a safe directory
+            output_dir = Path("results")
+            output_dir.mkdir(exist_ok=True)
+            filepath = output_dir / safe_filename
+            
+            # Get the final itinerary
+            final_itinerary = result.get('final_itinerary', {})
+            
+            # Add location details to activities
+            if 'daily_itinerary' in final_itinerary:
+                for day_key, day_data in final_itinerary['daily_itinerary'].items():
+                    for activity in day_data.get('activities', []):
+                        # Initialize details if not present
+                        if 'details' not in activity:
+                            activity['details'] = {}
+                        
+                        # Find matching place or restaurant
+                        if activity['type'] in ['attraction', 'dining']:
+                            # Search in places
+                            if activity['type'] == 'attraction':
+                                for place in result.get('places', []):
+                                    if place.get('name') == activity['title']:
+                                        activity['details'].update({
+                                            'location': place.get('location', ''),
+                                            'latitude': place.get('latitude'),
+                                            'longitude': place.get('longitude')
+                                        })
+                                        break
+                            # Search in restaurants
+                            elif activity['type'] == 'dining':
+                                for restaurant in result.get('restaurants', []):
+                                    if restaurant.get('name') == activity['title']:
+                                        activity['details'].update({
+                                            'location': restaurant.get('location', ''),
+                                            'latitude': restaurant.get('latitude'),
+                                            'longitude': restaurant.get('longitude')
+                                        })
+                                        break
+            
+            # Validate JSON before saving
+            try:
+                # First try to serialize to JSON string to validate
+                json_str = json.dumps(final_itinerary, cls=EnhancedJSONEncoder, ensure_ascii=False)
+                # Then parse it back to ensure it's valid
+                json.loads(json_str)
+            except json.JSONDecodeError as e:
+                print(f"\nWarning: Invalid JSON data detected: {str(e)}")
+                # Try to clean the data
+                if 'daily_itinerary' in final_itinerary:
+                    for day_key, day_data in final_itinerary['daily_itinerary'].items():
+                        if 'activities' in day_data:
+                            # Remove any invalid activities
+                            day_data['activities'] = [
+                                activity for activity in day_data['activities']
+                                if isinstance(activity, dict) and 'title' in activity
+                            ]
+            
+            # Save only the final itinerary to file
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(final_itinerary, f, indent=2, cls=EnhancedJSONEncoder, ensure_ascii=False)
+            print(f"\nItinerary saved to {filepath}")
+            
+        except Exception as e:
+            print(f"\nWarning: Failed to save itinerary to JSON file: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+        return result
+        
     except Exception as e:
         logger.error(f"Error in test: {str(e)}")
         print(f"\nError occurred: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     # Run the test

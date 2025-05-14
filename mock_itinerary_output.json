@@ -1,0 +1,315 @@
+{
+  "trip_summary": {
+    "destination": "Paris",
+    "start_date": "2025-06-11",
+    "end_date": "",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2025-06-11",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Arrival at Paris CDG Airport",
+          "time": "16:30",
+          "duration_minutes": 0,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check-in at Hotel de Luxe Paris",
+          "time": "17:00",
+          "duration_minutes": 30,
+          "details": {
+            "hotel_name": "Hotel de Luxe Paris",
+            "location": "15 Rue de Rivoli, 75004 Paris, France",
+            "price_per_night": 250.0,
+            "rating": 4.7,
+            "amenities": [
+              "WiFi",
+              "Breakfast",
+              "Air Conditioning"
+            ]
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Le Jules Verne",
+          "time": "19:00",
+          "duration_minutes": 90,
+          "details": {
+            "restaurant_name": "Le Jules Verne",
+            "location": "Eiffel Tower, Avenue Gustave Eiffel, 75007 Paris",
+            "rating": 4.5,
+            "cuisine": "French",
+            "price_range": "$$$"
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "tourist_attraction",
+          "title": "Visit Eiffel Tower",
+          "time": "20:30",
+          "duration_minutes": 90,
+          "details": {
+            "name": "Eiffel Tower",
+            "location": "Champ de Mars, 5 Avenue Anatole France, 75007 Paris",
+            "rating": 4.6
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2025-06-12",
+      "activities": [
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "Breakfast at Hotel de Luxe Paris",
+          "time": "08:00",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Visit Louvre Museum",
+          "time": "09:30",
+          "duration_minutes": 180,
+          "details": {
+            "name": "Louvre Museum",
+            "location": "Rue de Rivoli, 75001 Paris",
+            "rating": 4.7
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch at Caf\u00e9 de Flore",
+          "time": "12:30",
+          "duration_minutes": 90,
+          "details": {
+            "restaurant_name": "Caf\u00e9 de Flore",
+            "location": "172 Boulevard Saint-Germain, 75006 Paris",
+            "rating": 4.2,
+            "cuisine": "French",
+            "price_range": "$$$"
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "tourist_attraction",
+          "title": "Visit Notre-Dame Cathedral",
+          "time": "14:00",
+          "duration_minutes": 90,
+          "details": {
+            "name": "Notre-Dame Cathedral",
+            "location": "6 Parvis Notre-Dame - Pl. Jean-Paul II, 75004 Paris",
+            "rating": 4.7
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "monument",
+          "title": "Visit Arc de Triomphe",
+          "time": "16:00",
+          "duration_minutes": 60,
+          "details": {
+            "name": "Arc de Triomphe",
+            "location": "Place Charles de Gaulle, 75008 Paris",
+            "rating": 4.7
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Le Comptoir du Relais",
+          "time": "19:00",
+          "duration_minutes": 90,
+          "details": {
+            "restaurant_name": "Le Comptoir du Relais",
+            "location": "9 Carrefour de l'Od\u00e9on, 75006 Paris",
+            "rating": 4.3,
+            "cuisine": "French",
+            "price_range": "$$$"
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    },
+    "day_3": {
+      "date": "2025-06-13",
+      "activities": [
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Visit Mus\u00e9e d'Orsay",
+          "time": "09:00",
+          "duration_minutes": 120,
+          "details": {
+            "name": "Mus\u00e9e d'Orsay",
+            "location": "1 Rue de la L\u00e9gion d'Honneur, 75007 Paris",
+            "rating": 4.7
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch at L'As du Fallafel",
+          "time": "12:00",
+          "duration_minutes": 60,
+          "details": {
+            "restaurant_name": "L'As du Fallafel",
+            "location": "34 Rue des Rosiers, 75004 Paris",
+            "rating": 4.4,
+            "cuisine": "Middle Eastern",
+            "price_range": "$"
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "religious_site",
+          "title": "Visit Sacr\u00e9-C\u0153ur",
+          "time": "14:00",
+          "duration_minutes": 90,
+          "details": {
+            "name": "Sacr\u00e9-C\u0153ur",
+            "location": "35 Rue du Chevalier de la Barre, 75018 Paris",
+            "rating": 4.8
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Chez Aline",
+          "time": "19:00",
+          "duration_minutes": 90,
+          "details": {
+            "restaurant_name": "Chez Aline",
+            "location": "85 Rue de la Roquette, 75011 Paris",
+            "rating": 4.3,
+            "cuisine": "French",
+            "price_range": "$$"
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Departure from Paris CDG Airport",
+          "time": "18:00",
+          "duration_minutes": 0,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "Hotel de Luxe Paris",
+      "rating": 4.7,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

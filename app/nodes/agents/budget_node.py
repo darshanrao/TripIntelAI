@@ -3,38 +3,32 @@ from datetime import datetime
 from app.schemas.trip_schema import TripMetadata, Budget
 import json
 from langchain_anthropic import ChatAnthropic
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def search_real_prices(location: str, category: str, preferences: List[str]) -> Dict[str, Any]:
-    """
-    Search for real price information for a given location and category.
-    
-    Args:
-        location: City/destination name
-        category: Type of price to search (hotel, food, activities)
-        preferences: List of user preferences (budget, luxury, etc.)
-        
-    Returns:
-        Dictionary with price information
-    """
-    # Initialize Claude
-    llm = ChatAnthropic(
-        model="claude-3-haiku-20240307",
-        temperature=0.2,
-        max_tokens=1000
-    )
-    
-    # Construct search queries based on category
-    if category == "hotel":
-        search_term = f"average {' '.join(preferences)} hotel prices in {location} per night 2024"
-    elif category == "food":
-        search_term = f"average {' '.join(preferences)} restaurant meal costs in {location} 2024"
-    elif category == "activities":
-        search_term = f"tourist attraction ticket prices in {location} 2024"
-    
-    # Use web search to get real price data
+    """Search for real prices in a location for a specific category."""
     try:
+        # Initialize Claude
+        llm = ChatAnthropic(
+            model="claude-3-haiku-20240307",
+            temperature=0.2,
+            max_tokens=1000
+        )
+        
+        # Construct search queries based on category
+        if category == "hotel":
+            search_term = f"average {' '.join(preferences)} hotel prices in {location} per night 2024"
+        elif category == "food":
+            search_term = f"average {' '.join(preferences)} restaurant meal costs in {location} 2024"
+        elif category == "activities":
+            search_term = f"tourist attraction ticket prices in {location} 2024"
+        
+        # Use web search to get real price data
         response = await llm.ainvoke(
-            f"""Search for current {search_term}. 
+            f"""Search for current {category} prices in {location}. 
+            Focus on {', '.join(preferences) if preferences else 'general'} options.
             Extract and return ONLY a JSON object with:
             - min_price: minimum typical price in USD
             - max_price: maximum typical price in USD
@@ -48,26 +42,68 @@ async def search_real_prices(location: str, category: str, preferences: List[str
                 "average_price": float,
                 "details": "string"
             }}
+            
+            If you cannot find specific prices, use reasonable estimates based on the location and category.
             """
         )
         
         # Parse the response to extract the JSON
         content = response.content
+        if not content:
+            raise ValueError("Empty response from LLM")
+            
+        # Try to extract JSON from different formats
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
         
-        price_data = json.loads(content)
+        # Clean the content to ensure it's valid JSON
+        content = content.strip()
+        if not content:
+            raise ValueError("No JSON content found in response")
+            
+        try:
+            price_data = json.loads(content)
+        except json.JSONDecodeError:
+            # If JSON parsing fails, try to extract numbers from the text
+            import re
+            numbers = re.findall(r'\d+(?:\.\d+)?', content)
+            if len(numbers) >= 3:
+                price_data = {
+                    "min_price": float(numbers[0]),
+                    "max_price": float(numbers[1]),
+                    "average_price": float(numbers[2]),
+                    "details": "Extracted from text response"
+                }
+            else:
+                raise ValueError("Could not extract price data from response")
+        
+        # Validate the price data
+        if not all(key in price_data for key in ["min_price", "max_price", "average_price"]):
+            raise ValueError("Missing required price fields")
+            
+        # Ensure all prices are positive numbers
+        for key in ["min_price", "max_price", "average_price"]:
+            if not isinstance(price_data[key], (int, float)) or price_data[key] < 0:
+                price_data[key] = 0
+                
         return price_data
         
     except Exception as e:
-        print(f"Error searching real prices for {category} in {location}: {str(e)}")
+        logger.error(f"Error searching real prices for {category} in {location}: {str(e)}")
+        # Return default values based on category
+        defaults = {
+            "hotel": {"min": 50, "max": 300, "avg": 150},
+            "food": {"min": 10, "max": 50, "avg": 25},
+            "activities": {"min": 5, "max": 100, "avg": 30}
+        }
+        category_defaults = defaults.get(category, {"min": 0, "max": 0, "avg": 0})
         return {
-            "min_price": 0,
-            "max_price": 0,
-            "average_price": 0,
-            "details": f"Error fetching prices: {str(e)}"
+            "min_price": category_defaults["min"],
+            "max_price": category_defaults["max"],
+            "average_price": category_defaults["avg"],
+            "details": f"Using default values due to error: {str(e)}"
         }
 
 async def get_real_hotel_prices(state: Dict[str, Any], metadata: TripMetadata) -> float:

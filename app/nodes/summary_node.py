@@ -784,6 +784,20 @@ async def summary_node(state: GraphState) -> GraphState:
             state["itinerary"] = itinerary_data
             print("Added itinerary JSON to state")
             
+            # Save the final itinerary to a JSON file
+            try:
+                # Create a filename based on destination and dates
+                destination = itinerary_data.get("trip_summary", {}).get("destination", "trip")
+                start_date = itinerary_data.get("trip_summary", {}).get("start_date", "")
+                filename = f"itinerary_{destination.replace(' ', '_')}_{start_date}.json"
+                
+                # Save to file
+                with open(filename, "w") as f:
+                    json.dump(itinerary_data, f, indent=2, default=datetime_to_str)
+                print(f"\nFinal itinerary saved to {filename}")
+            except Exception as e:
+                print(f"Warning: Could not save itinerary to file: {str(e)}")
+            
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {str(e)}")
             print(f"Problematic content: {content[:500]}...")

@@ -47,8 +47,31 @@ class PerplexityFlightSearch:
         max_results: int = 5
     ) -> List[Dict[str, Any]]:
         """Search for flights using Perplexity API"""
-        # Construct a natural language query
-        query = f"Find {max_results} flights from {origin_city} to {destination_city} on {departure_date}. For each flight, provide: airline name, flight number, departure airport code and city, arrival airport code and city, departure and arrival times, price in USD, duration in minutes, number of stops, aircraft type, cabin class, and whether baggage is included. Format the response as a JSON array of flight objects."
+        # Construct a natural language query with sample JSON format
+        query = f"""Find {max_results} flights from {origin_city} to {destination_city} on {departure_date}. 
+For each flight, provide the following information in a JSON array format:
+
+[
+    {{
+        "id": "DL123-SFO-JFK",
+        "airline": "Delta Air Lines",
+        "flight_number": "DL123",
+        "departure_airport": "SFO",
+        "departure_city": "San Francisco",
+        "arrival_airport": "JFK",
+        "arrival_city": "New York",
+        "departure_time": "2024-05-20T08:30:00",
+        "arrival_time": "2024-05-20T14:10:00",
+        "price": 450.00,
+        "duration_minutes": 340,
+        "stops": 0,
+        "aircraft": "Boeing 737-900",
+        "cabin_class": "Economy",
+        "baggage_included": true
+    }}
+]
+
+Please ensure all fields are included and properly formatted."""
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",

@@ -1,5 +1,4 @@
 from app.nodes.agents.flights_node import flights_node
-from app.nodes.agents.places_node import places_node
 from app.nodes.agents.reviews_node import reviews_node
 from app.nodes.agents.budget_node import budget_node
 from app.nodes.agents.route_node import route_node

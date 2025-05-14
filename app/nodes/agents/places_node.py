@@ -5,72 +5,6 @@ from app.utils.logger import logger
 from app.schemas.trip_schema import TripMetadata
 from app.nodes.agent_nodes import get_city_attractions, _get_restaurants, geocode_location
 
-async def places_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Get places (attractions and restaurants) for the destination.
-    
-    Args:
-        state: Current state containing metadata and other information
-        
-    Returns:
-        Updated state with places information
-    """
-    try:
-        # Get metadata from state
-        metadata = state.get("metadata")
-        if not isinstance(metadata, TripMetadata):
-            raise ValueError("Invalid metadata format")
-            
-        # Get destination from metadata
-        destination = metadata.destination
-        if not destination:
-            raise ValueError("No destination specified in metadata")
-            
-        # Check if the Google Maps API key is loaded
-        api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-        if not api_key:
-            logger.error("Google Maps API key not found. Cannot initialize Google Maps client.")
-            raise ValueError("Google Maps API key not found")
-        else:
-            logger.info("Google Maps API key loaded successfully.")
-        
-        # Initialize Google Maps client
-        gmaps = googlemaps.Client(key=api_key)
-        
-        # Get preferences from metadata
-        preferences = metadata.preferences or []
-        
-        # Search for places based on preferences
-        places = []
-        for preference in preferences:
-            # Search for places matching the preference
-            places_result = gmaps.places(
-                query=f"{preference} in {destination}",
-                type="tourist_attraction" if preference in ["museums", "historical sites"] else None
-            )
-            
-            # Process results
-            for place in places_result.get("results", []):
-                place_details = {
-                    "name": place.get("name"),
-                    "place_id": place.get("place_id"),
-                    "location": place.get("geometry", {}).get("location"),
-                    "rating": place.get("rating"),
-                    "types": place.get("types", []),
-                    "category": preference
-                }
-                places.append(place_details)
-        
-        # Update state with places
-        state["places"] = places
-        
-        return state
-        
-    except Exception as e:
-        logger.error(f"Error in places node: {str(e)}")
-        state["error"] = str(e)
-        return state
-
 async def fetch_attractions(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Get attractions for the destination.
@@ -92,11 +26,11 @@ async def fetch_attractions(state: Dict[str, Any]) -> Dict[str, Any]:
         if not destination:
             raise ValueError("No destination specified in metadata")
             
-        # Check if the Google Maps API key is loaded
-        api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+        # Check if the Google Places API key is loaded
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY")
         if not api_key:
-            logger.error("Google Maps API key not found. Cannot initialize Google Maps client.")
-            raise ValueError("Google Maps API key not found")
+            logger.error("Google Places API key not found. Cannot initialize Google Maps client.")
+            raise ValueError("Google Places API key not found")
         
         # Initialize Google Maps client
         gmaps = googlemaps.Client(key=api_key)
@@ -110,7 +44,7 @@ async def fetch_attractions(state: Dict[str, Any]) -> Dict[str, Any]:
         attractions = get_city_attractions(city_lat, city_lng, destination)
         
         # Update state with attractions
-        state["attractions"] = attractions
+        state["places"] = attractions
         
         return state
         
@@ -140,11 +74,11 @@ async def fetch_restaurants(state: Dict[str, Any]) -> Dict[str, Any]:
         if not destination:
             raise ValueError("No destination specified in metadata")
             
-        # Check if the Google Maps API key is loaded
-        api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+        # Check if the Google Places API key is loaded
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY")
         if not api_key:
-            logger.error("Google Maps API key not found. Cannot initialize Google Maps client.")
-            raise ValueError("Google Maps API key not found")
+            logger.error("Google Places API key not found. Cannot initialize Google Maps client.")
+            raise ValueError("Google Places API key not found")
         
         # Initialize Google Maps client
         gmaps = googlemaps.Client(key=api_key)
