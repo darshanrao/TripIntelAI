@@ -1,7 +1,7 @@
 # TripIntel AI - Intelligent Travel Planning Assistant
 
 
-[![TripIntel AI Demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=rXdrZjP-H3U)
+[![TripIntel AI Demo](https://img.youtube.com/vi/rXdrZjP-H3U/0.jpg)](https://www.youtube.com/watch?v=rXdrZjP-H3U)
 
 ## Problem Statement
 
