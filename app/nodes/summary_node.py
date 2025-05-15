@@ -2,8 +2,7 @@ from typing import Dict, Any, TypedDict, Optional, List, Set
 from datetime import datetime, timedelta
 import json
 import asyncio
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage
+from app.utils.gemini_client import get_gemini_response
 from app.schemas.trip_schema import TripMetadata
 from app.nodes.location_coordinates import LocationCoordinates
 
@@ -201,54 +200,128 @@ Return your response ONLY as a valid JSON object with the following structure:
       "date": "YYYY-MM-DD",
       "activities": [
         {{
-          "type": "transportation|accommodation|attraction|dining",
-          "category": "flight|hotel|landmark|museum|lunch|dinner|etc",
-          "title": "descriptive title",
           "time": "HH:MM",
           "duration_minutes": number,
-          "details": {{
-            // Essential details only
-          }},
-          "review_insights": {{
-            // Only include if review insights are available
-            "sentiment": "positive/negative/neutral",
-            "strengths": ["key strength"],
-            "weaknesses": ["key weakness"],
-            "summary": "1-2 sentence summary"
-          }}
+          "type": "string",
+          "details": "string"
         }}
       ]
     }}
-  }},
-  "review_highlights": {{
-    "top_rated_places": [
-      {{
-        "name": "place_name",
-        "rating": number,
-        "key_strength": "main strength",
-        "summary": "1 sentence"
-      }}
-    ],
-    "top_rated_restaurants": [
-      {{
-        "name": "restaurant_name",
-        "rating": number,
-        "key_strength": "main strength",
-        "summary": "1 sentence"
-      }}
-    ],
-    "hotel_review_summary": {{
-      "name": "hotel_name",
-      "rating": number,
-      "key_strength": "main strength",
-      "key_weakness": "main weakness",
-      "summary": "1 sentence"
-    }}
   }}
 }}
-
-IMPORTANT: Your output MUST be a valid JSON object. Do not include any explanations, markdown, or text outside the JSON structure.
 """
+
+async def summary_node(state: GraphState) -> GraphState:
+    """
+    Generate a detailed trip itinerary using Gemini.
+    
+    Args:
+        state: Current state containing trip metadata, flights, hotel, places, restaurants, budget, and route
+        
+    Returns:
+        Updated state with generated itinerary
+    """
+    # Check if we have metadata for required information
+    if "metadata" not in state or not state["metadata"]:
+        state["error"] = "No trip metadata available for summary"
+        state["itinerary"] = "No itinerary could be generated."
+        return state
+
+    flights_to_use = state.get("selected_flights", []) or state.get("flights", [])
+
+    try:
+        # Prepare data for the prompt
+        try:
+            metadata = state.get("metadata")
+            if metadata is not None:
+                if hasattr(metadata, 'dict'):
+                    try:
+                        metadata_dict = metadata.dict()
+                    except Exception:
+                        if hasattr(metadata, 'model_dump'):
+                            metadata_dict = metadata.model_dump()
+                        else:
+                            metadata_dict = {
+                                "source": getattr(metadata, "source", "Unknown"),
+                                "destination": getattr(metadata, "destination", "Unknown"),
+                                "start_date": getattr(metadata, "start_date", None),
+                                "end_date": getattr(metadata, "end_date", None),
+                                "num_people": getattr(metadata, "num_people", 1),
+                                "preferences": getattr(metadata, "preferences", [])
+                            }
+                else:
+                    metadata_dict = metadata
+            else:
+                metadata_dict = {}
+            metadata_json = safe_json_dumps(metadata_dict, indent=2)
+            flights_json = safe_json_dumps(flights_to_use, indent=2)
+            hotel_json = safe_json_dumps(state.get("hotel", {}), indent=2)
+            places_json = safe_json_dumps(state.get("places", []), indent=2)
+            restaurants_json = safe_json_dumps(state.get("restaurants", []), indent=2)
+            budget_json = safe_json_dumps(state.get("budget", {}), indent=2)
+            route_json = safe_json_dumps(state.get("route", {}), indent=2)
+        except Exception as e:
+            state["error"] = f"Error preparing data: {str(e)}"
+            state["itinerary"] = "Error preparing itinerary data. Please try again."
+            return state
+
+        # Format the prompt
+        try:
+            prompt = ITINERARY_PROMPT.format(
+                metadata=metadata_json,
+                selected_flights=flights_json,
+                hotel=hotel_json,
+                places=places_json,
+                restaurants=restaurants_json,
+                budget=budget_json,
+                route=route_json
+            )
+        except Exception as e:
+            state["error"] = f"Error formatting prompt: {str(e)}"
+            state["itinerary"] = "Error preparing itinerary prompt. Please try again."
+            return state
+
+        # Call Gemini API
+        try:
+            response_text = await get_gemini_response(
+                prompt,
+                model="gemini-2.0-flash",
+                max_tokens=2000
+            )
+        except Exception as e:
+            state["error"] = f"Error calling Gemini API: {str(e)}"
+            state["itinerary"] = "Error communicating with Gemini. Please try again."
+            return state
+
+        if not response_text:
+            state["error"] = "Empty response from Gemini"
+            state["itinerary"] = "No itinerary could be generated."
+            return state
+
+        # Parse the JSON response
+        try:
+            # Remove markdown code block if present
+            content = response_text.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            itinerary_data = json.loads(content)
+        except Exception as e:
+            state["error"] = f"Failed to parse Gemini's response as JSON: {str(e)}"
+            state["itinerary"] = f"We couldn't format your itinerary properly, but here's what we have:\n\n{content[:2000]}..."
+            return state
+
+        # Optionally, merge review insights or add coordinates here if needed
+        state["itinerary"] = itinerary_data
+        return state
+
+    except Exception as e:
+        state["error"] = f"Error generating itinerary: {str(e)}"
+        state["itinerary"] = "An error occurred while generating your itinerary."
+        return state
 
 def merge_review_insights(itinerary: Dict[str, Any], state: GraphState) -> Dict[str, Any]:
     """
@@ -609,217 +682,4 @@ async def add_coordinates_to_itinerary(itinerary_data: Dict[str, Any]) -> Dict[s
         import traceback
         print(f"Error adding coordinates to itinerary: {str(e)}")
         print(traceback.format_exc())
-        return itinerary_data
-
-async def summary_node(state: GraphState) -> GraphState:
-    """
-    Generate a detailed itinerary based on all the collected information.
-    
-    Args:
-        state: Current state containing all trip information
-        
-    Returns:
-        Updated state with generated itinerary
-    """
-    # Check if we have metadata for required information
-    if "metadata" not in state or not state["metadata"]:
-        state["error"] = "No trip metadata available for summary"
-        state["itinerary"] = "No itinerary could be generated."
-        return state
-    
-    # Use selected flights if available, otherwise use all flights
-    flights_to_use = state.get("selected_flights", []) or state.get("flights", [])
-    
-    try:
-        # Debug logging
-        print("=== DEBUG INFO ===")
-        print(f"Metadata: {state.get('metadata', None) is not None}")
-        print(f"Flights: {len(flights_to_use)} available")
-        print(f"Hotel data: {bool(state.get('hotel', {}))}")
-        print(f"Places data: {len(state.get('places', []))}")
-        print(f"Restaurants data: {len(state.get('restaurants', []))}")
-        print("=================")
-        
-        # Prepare data for the prompt
-        try:
-            # Extract and prepare metadata (handle potential circular references)
-            metadata = state.get("metadata")
-            if metadata is not None:
-                if hasattr(metadata, 'dict'):
-                    try:
-                        metadata_dict = metadata.dict()
-                    except Exception:
-                        if hasattr(metadata, 'model_dump'):
-                            metadata_dict = metadata.model_dump()
-                        else:
-                            metadata_dict = {
-                                "source": getattr(metadata, "source", "Unknown"),
-                                "destination": getattr(metadata, "destination", "Unknown"),
-                                "start_date": getattr(metadata, "start_date", None),
-                                "end_date": getattr(metadata, "end_date", None),
-                                "num_people": getattr(metadata, "num_people", 1),
-                                "preferences": getattr(metadata, "preferences", [])
-                            }
-                else:
-                    metadata_dict = metadata
-            else:
-                metadata_dict = {}
-                
-            # Use safe_json_dumps to handle circular references
-            metadata_json = safe_json_dumps(metadata_dict, indent=2)
-            flights_json = safe_json_dumps(flights_to_use, indent=2)
-            hotel_json = safe_json_dumps(state.get("hotel", {}), indent=2)
-            places_json = safe_json_dumps(state.get("places", []), indent=2)
-            restaurants_json = safe_json_dumps(state.get("restaurants", []), indent=2)
-            budget_json = safe_json_dumps(state.get("budget", {}), indent=2)
-            route_json = safe_json_dumps(state.get("route", {}), indent=2)
-            print("Successfully serialized all data to JSON")
-        except Exception as e:
-            print(f"Error serializing data to JSON: {str(e)}")
-            state["error"] = f"Error preparing data: {str(e)}"
-            state["itinerary"] = "Error preparing itinerary data. Please try again."
-            return state
-        
-        # Format the prompt
-        try:
-            prompt = ITINERARY_PROMPT.format(
-                metadata=metadata_json,
-                selected_flights=flights_json,
-                hotel=hotel_json,
-                places=places_json,
-                restaurants=restaurants_json,
-                budget=budget_json,
-                route=route_json
-            )
-            print("Successfully formatted prompt template")
-        except Exception as e:
-            print(f"Error formatting prompt: {str(e)}")
-            state["error"] = f"Error formatting prompt: {str(e)}"
-            state["itinerary"] = "Error preparing itinerary prompt. Please try again."
-            return state
-        
-        # Initialize LLM
-        try:
-            llm = ChatAnthropic(
-                model="claude-3-sonnet-20240229",
-                temperature=0.3,
-                max_tokens=4000
-            )
-            print("Successfully initialized LLM")
-        except Exception as e:
-            print(f"Error initializing LLM: {str(e)}")
-            state["error"] = f"Error initializing language model: {str(e)}"
-            state["itinerary"] = "Error with language model. Please try again."
-            return state
-        
-        # Get the itinerary from Claude
-        try:
-            print("Calling Claude API...")
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            print("Successfully received response from Claude")
-        except Exception as e:
-            print(f"Error calling Claude API: {str(e)}")
-            state["error"] = f"Error generating content: {str(e)}"
-            state["itinerary"] = "Error communicating with language model. Please try again."
-            return state
-        
-        # Parse the response content
-        try:
-            # Handle any markdown code blocks in the response
-            content = response.content
-            print(f"Raw content length: {len(content)}")
-            print(f"Content preview: {content[:200]}...")
-            
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-                print("Extracted JSON from code block with 'json' tag")
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-                print("Extracted JSON from generic code block")
-            
-            # Parse the JSON
-            print("Attempting to parse JSON...")
-            itinerary_data = json.loads(content)
-            print("Successfully parsed JSON")
-            
-            # Merge review insights
-            print("Merging review insights...")
-            itinerary_data = merge_review_insights(itinerary_data, state)
-            print("Successfully merged review insights")
-            
-            # Add coordinates to places in the itinerary
-            print("Adding coordinates to places in the itinerary...")
-            itinerary_data = await add_coordinates_to_itinerary(itinerary_data)
-            print("Successfully added coordinates")
-            
-            # Print full JSON result
-            print("\nComplete itinerary JSON:")
-            print(json.dumps(itinerary_data, indent=2, default=datetime_to_str))
-            
-            # Ask user if they want to modify the itinerary
-            print("\n" + "-" * 80)
-            user_response = input("Would you like to modify any aspect of this itinerary? (y/n): ")
-            if user_response.lower() != 'y':
-                print("\nFull itinerary JSON with latitude and longitude:")
-                print(json.dumps(itinerary_data, indent=2, default=datetime_to_str))
-                
-                # Print a summary of coordinates added
-                print("\nLocation Coordinates Summary:")
-                print("-" * 40)
-                for day_key, day_data in itinerary_data["daily_itinerary"].items():
-                    if "activities" in day_data:
-                        for activity in day_data["activities"]:
-                            if "details" in activity:
-                                details = activity["details"]
-                                name = details.get("name", "")
-                                location = details.get("location", "")
-                                lat = details.get("latitude")
-                                lon = details.get("longitude")
-                                
-                                if lat and lon:
-                                    place = name or location
-                                    print(f"{place}: Latitude={lat}, Longitude={lon}")
-            
-            # Add JSON directly to state instead of converting to readable format
-            state["itinerary"] = itinerary_data
-            print("Added itinerary JSON to state")
-            
-            # Save the final itinerary to a JSON file
-            try:
-                # Create a filename based on destination and dates
-                destination = itinerary_data.get("trip_summary", {}).get("destination", "trip")
-                start_date = itinerary_data.get("trip_summary", {}).get("start_date", "")
-                filename = f"itinerary_{destination.replace(' ', '_')}_{start_date}.json"
-                
-                # Save to file
-                with open(filename, "w") as f:
-                    json.dump(itinerary_data, f, indent=2, default=datetime_to_str)
-                print(f"\nFinal itinerary saved to {filename}")
-            except Exception as e:
-                print(f"Warning: Could not save itinerary to file: {str(e)}")
-            
-        except json.JSONDecodeError as e:
-            print(f"JSON parsing error: {str(e)}")
-            print(f"Problematic content: {content[:500]}...")
-            state["error"] = f"Failed to parse itinerary JSON: {str(e)}"
-            
-            # Try to extract any text content that might be useful
-            cleaned_content = content.replace("```json", "").replace("```", "").strip()
-            state["itinerary"] = f"We couldn't format your itinerary properly, but here's what we have:\n\n{cleaned_content[:2000]}..."
-            
-            return state
-        except Exception as e:
-            print(f"Error in response processing: {str(e)}")
-            state["error"] = f"Failed to process itinerary: {str(e)}"
-            state["itinerary"] = response.content if hasattr(response, 'content') else "Response processing failed. Please try again."
-            return state
-        
-        return state
-        
-    except Exception as e:
-        import traceback
-        print(f"Unexpected error in summary_node: {str(e)}")
-        print(traceback.format_exc())
-        state["error"] = f"Error generating itinerary: {str(e)}"
-        state["itinerary"] = "An error occurred while generating your itinerary."
-        return state 
+        return itinerary_data 

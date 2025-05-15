@@ -1,0 +1,131 @@
+{
+  "trip_summary": {
+    "destination": "Unknown",
+    "start_date": "2025-05-14",
+    "end_date": "2025-05-14",
+    "duration_days": 1,
+    "total_budget": 2106.96
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2025-05-14",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Arrival at Miami International Airport (MIA)",
+          "time": "12:00",
+          "duration_minutes": 0,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check-in at Four Seasons Hotel Miami",
+          "time": "13:00",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch at Novecento",
+          "time": "14:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": 25.7649958,
+            "longitude": -80.19356669999999
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Visit Pérez Art Museum Miami",
+          "time": "16:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": 25.7859307,
+            "longitude": -80.1861912
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "park",
+          "title": "Walk through Bayfront Park",
+          "time": "18:30",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": 25.7767796,
+            "longitude": -80.2569271
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at The Capital Grille",
+          "time": "20:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": 25.769491,
+            "longitude": -80.19032
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "Four Seasons Hotel Miami",
+      "rating": 4.7,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

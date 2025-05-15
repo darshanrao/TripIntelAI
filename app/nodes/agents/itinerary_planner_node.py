@@ -13,6 +13,7 @@ from langchain_anthropic import ChatAnthropic
 # Local imports
 from app.schemas.trip_schema import TripMetadata
 from app.utils.logger import logger
+from app.utils.gemini_client import get_gemini_response
 
 DAILY_PLANNER_PROMPT = """You are a daily itinerary planner. Create a detailed schedule for day {current_day} of a {total_days}-day trip to {destination}.
 
@@ -456,25 +457,6 @@ async def itinerary_planner_node(state: GraphState) -> GraphState:
         Updated state with the new daily itinerary
     """
     try:
-        # Get API key from environment
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            error_msg = "ANTHROPIC_API_KEY not found in environment variables"
-            logger.error(error_msg)
-            state['error'] = error_msg
-            return state
-            
-        # Strip any whitespace or newlines
-        api_key = api_key.strip()
-        
-        # Initialize LLM
-        llm = ChatAnthropic(
-            api_key=api_key,
-            model="claude-3-sonnet-20240229",
-            temperature=0.2,
-            max_tokens=1000
-        )
-        
         # Get previous days' activities
         previous_days = state.get('daily_itineraries', [])
         
@@ -493,27 +475,35 @@ async def itinerary_planner_node(state: GraphState) -> GraphState:
             if restaurant.get('name') not in state.get('visited_restaurants', set())
         ]
         
-        # Use Claude to create the daily schedule
-        response = await llm.ainvoke(
-            DAILY_PLANNER_PROMPT.format(
-                current_day=state.get('current_day', 1),
-                total_days=state.get('total_days', 1),
-                destination=state.get('destination', 'Unknown'),
-                start_date=state.get('start_date', ''),
-                current_day_date=current_day_date,
-                flights=state.get('flights', []),
-                hotel=state.get('hotel', {}),
-                budget=state.get('budget', {}),
-                available_places=available_places,
-                available_restaurants=available_restaurants,
-                visited_places=list(state.get('visited_places', set())),
-                visited_restaurants=list(state.get('visited_restaurants', set())),
-                previous_days=previous_days
-            )
+        # Format the prompt
+        prompt = DAILY_PLANNER_PROMPT.format(
+            current_day=state.get('current_day', 1),
+            total_days=state.get('total_days', 1),
+            destination=state.get('destination', 'Unknown'),
+            start_date=state.get('start_date', ''),
+            current_day_date=current_day_date,
+            flights=state.get('flights', []),
+            hotel=state.get('hotel', {}),
+            budget=state.get('budget', {}),
+            available_places=available_places,
+            available_restaurants=available_restaurants,
+            visited_places=list(state.get('visited_places', set())),
+            visited_restaurants=list(state.get('visited_restaurants', set())),
+            previous_days=previous_days
         )
         
-        # Parse the response
-        content = response.content
+        # Get response from Gemini
+        content = await get_gemini_response(
+            prompt=prompt,
+            model="gemini-2.0-flash",
+            max_tokens=1000
+        )
+        
+        if not content:
+            error_msg = "Failed to get response from Gemini"
+            logger.error(error_msg)
+            state['error'] = error_msg
+            return state
         
         # Try multiple methods to extract and parse JSON
         daily_itinerary = None

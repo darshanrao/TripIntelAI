@@ -1,0 +1,30 @@
+{
+  "trip_summary": {
+    "destination": "Unknown",
+    "start_date": "2025-05-14",
+    "end_date": "2025-05-14",
+    "duration_days": 1,
+    "total_budget": 2685.9
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2025-05-14",
+      "activities": []
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "The Ritz-Carlton, Los Angeles",
+      "rating": 4.6,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "trip_summary": {
+    "destination": "Paris, France",
+    "start_date": "2024-05-20",
+    "end_date": "2024-05-22",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2024-05-20",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Arrival at JFK",
+          "time": "11:27",
+          "duration_minutes": 0,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check into The Ritz-Carlton, Los Angeles",
+          "time": "15:00",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Los Angeles County Museum of Art",
+          "time": "16:30",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at a nearby restaurant",
+          "time": "19:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "Gare de Lyon, Place Louis-Armand, 75012 Paris, France",
+            "latitude": 48.8433,
+            "longitude": 2.3732
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Stunning decor and ambiance",
+              "Excellent service with attentive staff",
+              "Delicious dishes such as leg of lamb and scallops"
+            ],
+            "weaknesses": [
+              "Expensive prices for some visitors"
+            ],
+            "summary": "Le Train Bleu is renowned for its breathtaking interior and exceptional service. Visitors often praise the attentive staff and the presentation of dishes. The restaurant offers a range of French cuisine, including leg of lamb and scallops, which are highly recommended. While some guests find it pricey, the overall experience is considered worth the cost. With over 7,000 reviews, it maintains a solid rating, reflecting its popularity among both locals and tourists."
+          }
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2024-05-21",
+      "activities": [
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "Breakfast at The Ritz-Carlton, Los Angeles",
+          "time": "08:00",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "California Science Center",
+          "time": "10:00",
+          "duration_minutes": 180,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Extensive hands-on science exhibits",
+              "Home to the Space Shuttle Endeavour",
+              "Engaging IMAX movies and special exhibitions"
+            ],
+            "weaknesses": [
+              "Located in Los Angeles, not Paris, which may confuse visitors searching for it in Paris"
+            ],
+            "summary": "The California Science Center in Los Angeles is highly regarded for its interactive science exhibits and unique aerospace artifacts, including the Space Shuttle Endeavour. Visitors frequently praise the engaging educational experiences and the quality of the IMAX films. However, it is important to note that this attraction is not located in Paris, France, but in Los Angeles, California, which is a significant geographic discrepancy for those seeking it in Paris."
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch near California Science Center",
+          "time": "13:00",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Natural History Museum of Los Angeles County",
+          "time": "14:30",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "park",
+          "title": "Gloria Molina Grand Park",
+          "time": "17:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Maccheroni Republic",
+          "time": "19:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "332 South Broadway, Los Angeles",
+            "latitude": 34.05003060000001,
+            "longitude": -118.2485361
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "The Ritz-Carlton, Los Angeles",
+      "rating": 4.6,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

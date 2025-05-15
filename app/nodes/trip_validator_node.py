@@ -4,7 +4,7 @@ import re
 from app.schemas.trip_schema import TripMetadata
 from app.nodes.missing_info_handler_node import missing_info_handler_node
 import json
-from app.utils.anthropic_client import anthropic_client, get_anthropic_client
+from app.utils.gemini_client import get_gemini_response
 from app.utils.logger import logger
 
 class GraphState(TypedDict):
@@ -83,7 +83,7 @@ async def trip_validator_node(state: Dict[str, Any]) -> Dict[str, Any]:
         
         # Convert metadata to dict if it's a TripMetadata object
         if isinstance(metadata, TripMetadata):
-            metadata_dict = metadata.dict()
+            metadata_dict = metadata.model_dump()
         else:
             metadata_dict = metadata
             
@@ -120,8 +120,7 @@ async def trip_validator_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # Get the next field to ask about
         next_field = missing_fields[0]
         
-        # Generate a contextual question using Claude
-        client = get_anthropic_client()
+        # Generate a contextual question using Gemini
         prompt = f"""
         You are a helpful travel planning assistant. The user is planning a trip to {metadata_dict.get('destination', 'an unspecified location')}.
         
@@ -143,16 +142,12 @@ async def trip_validator_node(state: Dict[str, Any]) -> Dict[str, Any]:
         Just return the question text, nothing else.
         """
         
-        response = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=100,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+        question = await get_gemini_response(
+            prompt,
+            model="gemini-2.0-flash",
+            max_tokens=100
         )
-        
-        question = response.content[0].text.strip()
+        question = question.strip()
         logger.info(f"Generated question for {next_field}: {question}")
         
         return {
@@ -176,7 +171,7 @@ async def trip_validator_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
 async def process_user_response(state: Dict[str, Any], user_response: str) -> Dict[str, Any]:
     """
-    Process user's response using Claude to extract and validate information.
+    Process user's response using Gemini to extract and validate information.
     Uses ReAct pattern to reason about the response and update state.
     
     Args:
@@ -203,13 +198,10 @@ async def process_user_response(state: Dict[str, Any], user_response: str) -> Di
         logger.info(f"Current metadata before processing: {metadata}")
         
         if isinstance(metadata, TripMetadata):
-            metadata_dict = metadata.dict()
+            metadata_dict = metadata.model_dump()
         else:
             metadata_dict = metadata.copy()
             
-        # Use Claude to analyze the response with specialized prompts
-        client = get_anthropic_client()
-        
         # Define specialized prompts for different field types
         prompts = {
             "preferences": f"""
@@ -353,31 +345,40 @@ async def process_user_response(state: Dict[str, Any], user_response: str) -> Di
             }}
         """)
         
-        response = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=200,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+        response_text = await get_gemini_response(
+            prompt,
+            model="gemini-2.0-flash",
+            max_tokens=200
         )
         
-        # Parse the response - properly handle the Message object
-        response_text = response.content[0].text
         if not response_text:
-            raise ValueError("Empty response from Claude")
+            raise ValueError("Empty response from Gemini")
             
         try:
+            # Try to parse the response as JSON
             analysis = json.loads(response_text)
         except json.JSONDecodeError:
-            logger.error("Failed to parse Claude's response as JSON")
-            return {
-                **new_state,
-                "thought": "Failed to parse response analysis",
-                "action": "error",
-                "action_input": {"error": "Invalid response format"},
-                "is_valid": False
-            }
+            # If parsing fails, try to extract JSON from the response
+            try:
+                # Look for JSON-like structure in the response
+                json_start = response_text.find("{")
+                json_end = response_text.rfind("}") + 1
+                if json_start >= 0 and json_end > json_start:
+                    json_str = response_text[json_start:json_end]
+                    analysis = json.loads(json_str)
+                else:
+                    raise ValueError("No JSON structure found in response")
+            except Exception as e:
+                logger.error(f"Failed to parse Gemini's response as JSON: {str(e)}")
+                logger.error(f"Raw response: {response_text}")
+                return {
+                    **new_state,
+                    "thought": "Failed to parse response analysis",
+                    "action": "ask_clarification",
+                    "action_input": {"field": current_field, "error": "Invalid response format"},
+                    "next_question": f"I'm having trouble understanding your response about {current_field}. Could you please rephrase it?",
+                    "is_valid": False
+                }
             
         # Update metadata with extracted value if confidence is high
         if analysis["confidence"] == "high" or current_field == "preferences":
@@ -423,7 +424,8 @@ async def process_user_response(state: Dict[str, Any], user_response: str) -> Di
         return {
             **new_state,
             "thought": f"Error occurred: {str(e)}",
-            "action": "error",
-            "action_input": {"error": str(e)},
+            "action": "ask_clarification",
+            "action_input": {"field": current_field, "error": str(e)},
+            "next_question": f"I'm having trouble processing your response about {current_field}. Could you please try again?",
             "is_valid": False
         }

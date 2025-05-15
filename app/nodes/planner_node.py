@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, Literal, Optional, TypedDict
-from langchain_anthropic import ChatAnthropic
 from app.schemas.trip_schema import TripMetadata
+from app.utils.gemini_client import get_gemini_response
 
 AGENT_SELECTOR_PROMPT = """You are a trip planning assistant. Based on the user's query and travel intent, decide which of the following travel planning nodes to call:
 
@@ -62,45 +62,30 @@ async def agent_selector_node(state: GraphState) -> GraphState:
         state["nodes_to_call"] = []
         return state
     
-    # Initialize LLM
-    llm = ChatAnthropic(
-        model="claude-3-haiku-20240307",
-        temperature=0.2,
-        max_tokens=1000
+    # Format the prompt
+    prompt = AGENT_SELECTOR_PROMPT.format(
+        query=user_query,
+        metadata=metadata.dict()
     )
     
-    # Use Claude to decide which nodes to call
-    response = await llm.ainvoke(
-        AGENT_SELECTOR_PROMPT.format(
-            query=user_query,
-            metadata=metadata.dict()
-        )
-    )
-    
-    # Parse the response content
     try:
-        import json
+        # Get response from Gemini
+        response = await get_gemini_response(
+            prompt,
+            model="gemini-2.0-flash",
+            max_tokens=1000
+        )
         
-        # Extract list from the response
-        content = response.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        elif "[" in content and "]" in content:
-            content = content[content.find("["):content.rfind("]")+1]
-        
-        nodes_to_call = json.loads(content)
-        
-        # Validate node types
-        valid_nodes = ["flights", "route", "places", "restaurants", "hotel", "budget"]
-        nodes_to_call = [node for node in nodes_to_call if node in valid_nodes]
-        
-        # Add to state
-        state["nodes_to_call"] = nodes_to_call
+        # Parse the response to get the list of nodes
+        # The response should be a list of node names
+        nodes = eval(response.strip())  # Safe since we control the prompt format
+        if not isinstance(nodes, list):
+            raise ValueError("Invalid response format")
+            
+        state["nodes_to_call"] = nodes
+        return state
         
     except Exception as e:
-        state["error"] = f"Failed to parse agent selector output: {str(e)}"
-        state["nodes_to_call"] = ["flights", "hotel", "places", "budget"]  # Default fallback
-    
-    return state 
+        state["error"] = f"Error in agent selector: {str(e)}"
+        state["nodes_to_call"] = []
+        return state 

@@ -1,0 +1,321 @@
+{
+  "trip_summary": {
+    "destination": "Paris, France",
+    "start_date": "2024-05-20",
+    "end_date": "2024-05-22",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2024-05-20",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Arrival at Charles de Gaulle Airport (CDG)",
+          "time": "18:50",
+          "duration_minutes": 0,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "transportation",
+          "category": "transfer",
+          "title": "Transfer from CDG to Hôtel d'Orsay",
+          "time": "19:20",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check-in at Hôtel d'Orsay",
+          "time": "20:20",
+          "duration_minutes": 30,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner near Hôtel d'Orsay",
+          "time": "21:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "8 Rue de Lille, 75007 Paris, France",
+            "latitude": 48.8583,
+            "longitude": 2.3233
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "La Calèche offers a romantic atmosphere, making it ideal for couples.",
+              "The menu includes hearty French dishes with an Asian twist, providing a unique culinary experience.",
+              "The restaurant features a young and vibrant vibe, appealing to those looking for a modern dining experience."
+            ],
+            "weaknesses": [
+              "The menu and wine list can change frequently, which might not suit all diners who prefer consistency."
+            ],
+            "summary": "La Calèche is a modern French bistro located near the Musée d'Orsay, offering a romantic and vibrant dining experience. It is praised for its unique menu that blends French cuisine with Asian twists, such as the beef tataki and octopus dishes. The restaurant's extensive wine list is also a highlight. While some diners might find the frequent menu changes a drawback, overall, La Calèche is well-regarded for its atmosphere and culinary offerings. It is a great spot for those seeking a romantic dinner in a stylish setting."
+          }
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Relax at Hôtel d'Orsay",
+          "time": "22:30",
+          "duration_minutes": 90,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2024-05-21",
+      "activities": [
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Breakfast at Hôtel d'Orsay",
+          "time": "08:00",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Visit the Louvre Museum",
+          "time": "09:30",
+          "duration_minutes": 180,
+          "details": {
+            "location": "Rue de Rivoli, 75001 Paris, France",
+            "latitude": 48.8606,
+            "longitude": 2.3376
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "World-renowned art collection featuring masterpieces like the Mona Lisa and the Venus de Milo",
+              "Architectural beauty combining historic palace and modern glass pyramid entrance",
+              "Extensive and diverse exhibits appealing to a wide range of interests"
+            ],
+            "weaknesses": [
+              "Often very crowded, especially around popular exhibits and during peak tourist seasons"
+            ],
+            "summary": "The Louvre Museum in Paris is widely celebrated for its unparalleled art collection and stunning architecture, including the iconic glass pyramid entrance. Visitors consistently praise the breadth and depth of exhibits, which span centuries and cultures, making it a must-see attraction. However, many reviews note that the museum can be overwhelmingly crowded, which sometimes detracts from the experience. Despite this, the overall visitor sentiment remains highly positive due to the museum's cultural significance and the quality of its displays."
+          }
+        },
+        {
+          "type": "lunch",
+          "category": "lunch",
+          "title": "Lunch near the Louvre Museum",
+          "time": "12:30",
+          "duration_minutes": 60,
+          "details": {
+            "location": "93 Rue de Rivoli, 75001 Paris, France",
+            "latitude": 48.8611,
+            "longitude": 2.3364
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Exceptional location with views of the Louvre Pyramid and Cour Marly statues",
+              "High-quality French cuisine featuring seasonal vegetables, grilled meats, and fish",
+              "Elegant and iconic Parisian brasserie atmosphere with beautiful listed woodwork",
+              "Friendly and attentive service",
+              "Continuous service from morning until late night"
+            ],
+            "weaknesses": [
+              "Prices are on the higher side, reflecting the premium location and ambiance"
+            ],
+            "summary": "Le Café Marly is widely praised for its unique and iconic setting under the arcades of the Louvre, offering diners stunning views of the Louvre Pyramid and museum sculptures. Visitors highlight the refined French menu, which emphasizes quality ingredients and seasonal dishes. The elegant interior with historic woodwork and the option of terrace seating add to the memorable dining experience. Reviewers consistently note the attentive service and the convenience of continuous service throughout the day. While some mention the relatively high prices, most agree that the exceptional location and atmosphere justify the cost, making it a top choice for lunch near the Louvre."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "landmark",
+          "title": "Walk through Tuileries Garden",
+          "time": "13:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "Place de la Concorde, 75001 Paris, France",
+            "latitude": 48.8634,
+            "longitude": 2.3266
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Beautifully maintained gardens with stunning views and sculptures",
+              "Excellent location between the Louvre and Place de la Concorde, making it a perfect spot for a stroll",
+              "Rich historical significance and cultural importance"
+            ],
+            "weaknesses": [
+              "Can be very crowded, especially during peak tourist season",
+              "Some visitors find the security checks at entrances to be inconvenient"
+            ],
+            "summary": "Tuileries Garden is widely praised for its picturesque beauty and historical significance. Visitors often highlight the well-manicured lawns, ornate fountains, and the stunning sculptures throughout the garden. Its central location makes it a must-visit attraction for those exploring Paris. However, some visitors note that it can be quite crowded, which may detract from the tranquil experience. Overall, the garden receives high ratings across TripAdvisor and Google Reviews for its beauty and cultural importance."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "landmark",
+          "title": "Visit Place de la Concorde",
+          "time": "15:00",
+          "duration_minutes": 60,
+          "details": {
+            "location": "Place de la Concorde, 75008 Paris, France",
+            "latitude": 48.8656,
+            "longitude": 2.3212
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Historical significance and iconic landmarks like the Luxor Obelisk",
+              "Beautifully maintained gardens and fountains",
+              "Strategic location at the end of Champs-Élysées and near Tuileries Garden"
+            ],
+            "weaknesses": [
+              "Crowded and noisy due to its popularity and central location"
+            ],
+            "summary": "Place de la Concorde is a must-visit attraction in Paris, offering a blend of history, architecture, and scenic beauty. Visitors praise its iconic landmarks, such as the Luxor Obelisk, and the well-maintained gardens and fountains. The square's strategic location at the eastern end of the Champs-Élysées and near the Tuileries Garden makes it a central point for exploring Paris. However, some visitors find it overly crowded and noisy. Overall, reviews highlight a positive experience with many considering it a highlight of their Parisian trip."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "landmark",
+          "title": "Stroll along Champs-Élysées",
+          "time": "16:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "Champs-Élysées, 75008 Paris, France",
+            "latitude": 48.8685,
+            "longitude": 2.3036
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Iconic and beautiful scenery with historic landmarks like the Arc de Triomphe",
+              "Variety of luxury shopping and dining options",
+              "Vibrant atmosphere, especially during events like the Bastille Day parade"
+            ],
+            "weaknesses": [
+              "Crowded and touristy, which can detract from the experience for some visitors",
+              "Expensive shopping and dining options"
+            ],
+            "summary": "Visitors to the Champs-Élysées often praise its stunning beauty, rich history, and lively atmosphere. The avenue is renowned for its luxury shopping, cafes, and theaters, making it a must-visit destination for many. However, some visitors find it overly crowded and expensive. Despite these drawbacks, the Champs-Élysées remains a beloved spot for both locals and tourists alike, offering a unique blend of culture and entertainment. Recent reviews highlight the avenue's iconic status and the joy of strolling along it, especially during special events like the Bastille Day military parade."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "landmark",
+          "title": "Visit the Arc de Triomphe",
+          "time": "17:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "Place Charles de Gaulle, 75008 Paris, France",
+            "latitude": 48.8738,
+            "longitude": 2.295
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Panoramic views from the top are breathtaking",
+              "Historical significance and architectural beauty",
+              "Central location with easy access to public transport"
+            ],
+            "weaknesses": [
+              "Crowded and busy area, especially during peak tourist season",
+              "Long lines for tickets and security checks"
+            ],
+            "summary": "The Arc de Triomphe is a must-visit attraction in Paris, offering stunning views of the city from its top. Visitors praise its historical significance and architectural beauty, though some find the area overly crowded. The monument is easily accessible via public transport, with the Charles de Gaulle–Étoile station nearby. Reviews highlight the need for patience due to long lines for tickets and security checks. Overall, the experience is highly rated for its iconic status and the panoramic views it offers."
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner near Champs-Élysées",
+          "time": "19:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "99 Avenue des Champs-Élysées, 75008 Paris, France",
+            "latitude": 48.8693,
+            "longitude": 2.3073
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Excellent service and ambiance",
+              "High-quality French cuisine with a rich history",
+              "Prime location on the Champs-Élysées"
+            ],
+            "weaknesses": [
+              "Expensive prices, which may deter budget-conscious diners"
+            ],
+            "summary": "Fouquet's is a historic and upscale dining experience on the Champs-Élysées, offering exceptional French cuisine and impeccable service. The restaurant's ambiance is elegant and sophisticated, making it a popular choice for special occasions. While the prices are steep, the quality of food and service generally justify the cost. Visitors often praise the restaurant's iconic status and its ability to provide a quintessential Parisian dining experience. However, some may find the prices prohibitive."
+          }
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Relax at Hôtel d'Orsay",
+          "time": "21:30",
+          "duration_minutes": 90,
+          "details": {},
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "Hôtel d'Orsay",
+      "rating": 4.8,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

@@ -1141,8 +1141,16 @@ const ItineraryView = ({ itineraryData, apiResponse, onDayChange, onActivityHove
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-3"></div>
-          <div>Processing itinerary...</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <div className="text-lg font-medium mb-2">Generating Your Itinerary</div>
+          <div className="text-sm text-gray-400">This may take a few moments...</div>
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -22,14 +22,16 @@ async def test_trip_planner():
     # Create graph instance
     graph = TripPlannerGraph()
     
-    # Test query with more specific details
-    query = "I want to plan a 3-day trip to Paris for 2 people from May 20, 2024 to May 22, 2024. We're interested in museums, historical sites, and local cuisine. Budget is around $2000 per person."
-    print(f"\nTest Query: {query}")
+    # Prompt user for input
+    user_query = input("Enter your travel query (or press Enter to use the predefined query): ")
+    if not user_query:
+        user_query = "I want to plan a 3-day trip to Paris for 2 people from May 20, 2024 to May 22, 2024. We're interested in museums, historical sites, and local cuisine. Budget is around $2000 per person."
+    print(f"\nTest Query: {user_query}")
     
     # Initialize state with all required fields
     state = {
-        "query": query,
-        "raw_query": query,
+        "query": user_query,
+        "raw_query": user_query,
         "metadata": {
             "destination": "Paris, France",
             "start_date": "2024-05-20",

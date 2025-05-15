@@ -7,7 +7,10 @@
  * 3. Can be extended to add rate limiting, IP filtering, etc.
  */
 
-export default function handler(req, res) {
+// Helper function to create a delay
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+export default async function handler(req, res) {
   // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -32,8 +35,11 @@ export default function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  // Get the API key from environment variables - try both possible variable names
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  // Simulate backend processing time
+  await delay(10000); // 10 second delay
+
+  // Get the API key from environment variables
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
   if (!apiKey) {
     // Don't expose that the key is missing, just return an error

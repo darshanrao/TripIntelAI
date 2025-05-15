@@ -1,14 +1,10 @@
 from typing import Dict, Any, List, TypedDict, Optional
-from langchain_anthropic import ChatAnthropic
 from datetime import datetime
 from app.schemas.trip_schema import TripMetadata
 import json
 import re
-import os
-import asyncio
 import logging
-import traceback
-from app.utils.anthropic_client import get_anthropic_client
+from app.utils.gemini_client import get_gemini_response
 from app.utils.logger import logger
 
 # Configure logging
@@ -118,7 +114,7 @@ def extract_json_from_llm_response(text):
 
 async def intent_parser_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Parse the user's intent and extract trip metadata using Claude.
+    Parse the user's intent and extract trip metadata using Gemini.
     
     Args:
         state: Current state containing the user's query
@@ -138,121 +134,46 @@ async def intent_parser_node(state: Dict[str, Any]) -> Dict[str, Any]:
             
         logger.info(f"Processing user query: '{state}'")
         
-        # Initialize Anthropic client
-        client = get_anthropic_client()
-        logger.info("Successfully initialized Anthropic client directly")
-        
-        # Create prompt for Claude
-        prompt = f"""
-        You are a travel planning assistant. Extract travel information from this query:
-        "{query}"
-        
-        Extract the following information:
-        - source (departure city/country)
-        - destination (arrival city/country)
-        - start_date (in YYYY-MM-DD format)
-        - end_date (in YYYY-MM-DD format)
-        - num_people (as an integer)
-        - preferences (list of interests/requirements)
-        
-        Return ONLY a JSON object with these fields. Use null for missing values.
-        Example format:
-        {{
-            "source": "New York",
-            "destination": "Paris",
-            "start_date": "2024-05-15",
-            "end_date": "2024-05-22",
-            "num_people": 2,
-            "preferences": ["museums", "food"]
-        }}
-        """
-        
-        logger.info("Calling Claude API directly")
-        response = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=200,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+        # Format the prompt
+        prompt = INTENT_PARSER_PROMPT.format(query=query)
+        logger.info("Calling Gemini API")
+        response_text = await get_gemini_response(
+            prompt,
+            model="gemini-2.0-flash",
+            max_tokens=500
         )
         
-        # Extract the response text - properly handle the Message object
-        response_text = response.content[0].text
         if not response_text:
-            raise ValueError("Empty response from Claude")
+            raise ValueError("Empty response from Gemini")
             
-        logger.info(f"Received raw response from Claude: {response_text[:100]}...")
+        logger.info(f"Received raw response from Gemini: {response_text[:100]}...")
         
         # Parse the JSON response
-        try:
-            logger.info(f"Attempting to extract JSON from text: {response_text[:100]}...")
-            # Find JSON pattern in the response
-            json_pattern = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_pattern:
-                json_str = json_pattern.group(0)
-                logger.info(f"Found JSON pattern: {json_str[:100]}...")
-                intent_data = json.loads(json_str)
-            else:
-                raise ValueError("No JSON object found in response")
-                
-            logger.info(f"Successfully parsed intent data: {intent_data}")
+        intent_data = extract_json_from_llm_response(response_text)
+        if not intent_data:
+            raise ValueError("No JSON object found in response")
             
-            # Ensure preferences is a list
-            if intent_data.get("preferences") is None:
-                intent_data["preferences"] = []
-            
-            # Create TripMetadata instance
-            logger.info("Creating TripMetadata instance")
-            metadata = TripMetadata(**intent_data)
-            
-            # Update state with metadata
-            return {
-                **state,
-                "metadata": metadata,
-                "is_valid": True
-            }
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from response: {str(e)}")
-            return {
-                **state,
-                "error": f"Failed to parse response: {str(e)}",
-                "is_valid": False
-            }
-            
+        logger.info(f"Successfully parsed intent data: {intent_data}")
+        
+        # Ensure preferences is a list
+        if intent_data.get("preferences") is None:
+            intent_data["preferences"] = []
+        
+        # Create TripMetadata instance
+        logger.info("Creating TripMetadata instance")
+        metadata = TripMetadata(**intent_data)
+        
+        # Update state with metadata
+        return {
+            **state,
+            "metadata": metadata,
+            "is_valid": True
+        }
+        
     except Exception as e:
         logger.error(f"Error in intent parser: {str(e)}")
         return {
             **state,
             "error": str(e),
             "is_valid": False
-        }
-
-async def test_claude_json():
-    # Initialize Claude
-    from anthropic import Anthropic
-    
-    # Get API key from environment
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("ANTHROPIC_API_KEY not found in environment variables")
-        return
-    
-    client = Anthropic(api_key=api_key)
-    
-    # Simple prompt
-    response = client.messages.create(
-        model="claude-3-haiku-20240307",
-        max_tokens=1000,
-        temperature=0,
-        system="Return ONLY valid JSON.",
-        messages=[
-            {"role": "user", "content": "Return this exact JSON: {\"test\": \"success\"}"}
-        ]
-    )
-    
-    print("Raw response:", response.content[0].text)
-
-if __name__ == "__main__":
-    asyncio.run(test_claude_json()) 
+        } 

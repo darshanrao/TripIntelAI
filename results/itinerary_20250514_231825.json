@@ -1,0 +1,175 @@
+{
+  "trip_summary": {
+    "destination": "Unknown",
+    "start_date": "2025-05-14",
+    "end_date": "2025-05-14",
+    "duration_days": 1,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2025-05-14",
+      "activities": [
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "The Jefferson, Washington, DC",
+          "time": "09:00",
+          "duration_minutes": 30,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "The Jefferson, Washington, DC - Breakfast",
+          "time": "09:30",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Smithsonian National Museum of Natural History",
+          "time": "11:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "park",
+          "title": "National Mall",
+          "time": "13:00",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch near National Mall",
+          "time": "14:00",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "landmark",
+          "title": "Washington Monument",
+          "time": "15:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Lincoln Memorial",
+          "time": "17:30",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner in Georgetown",
+          "time": "19:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "The Jefferson, Washington, DC",
+      "rating": 4.7,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}
