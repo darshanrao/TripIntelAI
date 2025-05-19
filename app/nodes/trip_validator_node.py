@@ -406,7 +406,17 @@ async def process_user_response(state: Dict[str, Any], user_response: str) -> Di
             new_state["thought"] = analysis["reasoning"]
             new_state["action"] = "update_metadata"
             new_state["action_input"] = {"field": current_field, "value": analysis["extracted_value"]}
-            new_state["is_valid"] = False
+            
+            # Check if all required fields are now filled
+            required_fields = ["source", "destination", "start_date", "end_date", "num_people", "preferences"]
+            all_fields_filled = all(
+                metadata_dict.get(field) is not None and 
+                (not isinstance(metadata_dict.get(field), list) or len(metadata_dict.get(field)) > 0)
+                for field in required_fields
+            )
+            
+            # Set is_valid based on whether all required fields are filled
+            new_state["is_valid"] = all_fields_filled
             
             return new_state
         else:

@@ -1,0 +1,287 @@
+{
+  "trip_summary": {
+    "destination": "Paris, France",
+    "start_date": "2024-05-20",
+    "end_date": "2024-05-22",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2024-05-20",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Arrive at Las Vegas",
+          "time": "09:57",
+          "duration_minutes": 30,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "transportation",
+          "category": "transportation",
+          "title": "Travel to Hotel",
+          "time": "10:27",
+          "duration_minutes": 30,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check into Hilton Grand Vacations Club on the Las Vegas Strip",
+          "time": "10:57",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch at Jason's Deli",
+          "time": "12:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "100 North City Parkway, Las Vegas",
+            "latitude": 36.17427000000001,
+            "longitude": -115.145204
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "The Mob Museum",
+          "time": "14:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "shopping_mall",
+          "title": "Fremont Street Experience",
+          "time": "16:30",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Le Thai",
+          "time": "19:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "523 Fremont Street, Las Vegas",
+            "latitude": 36.1687423,
+            "longitude": -115.1398662
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Authentic Thai cuisine with a focus on traditional flavors",
+              "Excellent service and welcoming atmosphere",
+              "Variety of dishes available for both lunch and dinner"
+            ],
+            "weaknesses": [
+              "Limited seating capacity, which can lead to long wait times"
+            ],
+            "summary": "Le Chef Thaï is highly regarded for its authentic Thai flavors and traditional cooking methods. The restaurant offers a cozy atmosphere with excellent service, making it a favorite among locals and visitors alike. The menu includes a variety of dishes for both lunch and dinner, with options for takeout. While the seating is limited, the quality of the food and service makes it a must-visit for Thai cuisine enthusiasts. Reviews highlight the chef's expertise in blending traditional Thai recipes with fresh ingredients, creating a truly memorable dining experience."
+          }
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2024-05-21",
+      "activities": [
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "Breakfast at Hash House A Go Go",
+          "time": "08:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "The Neon Museum Las Vegas",
+          "time": "10:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Las Vegas Natural History Museum",
+          "time": "12:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch at Triple 7 Restaurant and Microbrewery",
+          "time": "14:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "Triple 7 Restaurant and Microbrewery, 77 Rue de la Folie Méricourt, 75011 Paris, France",
+            "latitude": 48.8643,
+            "longitude": 2.3745
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Excellent craft beers brewed on-site with a variety of styles",
+              "Friendly and knowledgeable staff providing great service",
+              "Cozy and inviting atmosphere suitable for casual dining"
+            ],
+            "weaknesses": [
+              "Limited food menu options compared to other dining venues"
+            ],
+            "summary": "Triple 7 Restaurant and Microbrewery in Paris is highly regarded for its quality craft beers brewed in-house, attracting beer enthusiasts and casual diners alike. Reviewers frequently praise the welcoming ambiance and attentive staff, making it a popular spot for lunch and social gatherings. While the food menu is somewhat limited, the dishes offered complement the beer selection well, contributing to an overall positive dining experience. Ratings on platforms like TripAdvisor and Google Reviews consistently reflect satisfaction with the beer quality and service, establishing Triple 7 as a notable microbrewery destination in Paris."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "casino",
+          "title": "Golden Nugget Las Vegas Hotel & Casino",
+          "time": "16:30",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Oscar's Steakhouse",
+          "time": "19:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "6 Rue De Chaillot, 75016 Paris, France",
+            "latitude": 48.8633,
+            "longitude": 2.2847
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "High-quality French and European cuisine",
+              "Excellent service and ambiance"
+            ],
+            "weaknesses": [
+              "Limited information available on specific weaknesses"
+            ],
+            "summary": "Oscar in Paris is highly rated on TripAdvisor with a score of 4.8 out of 5. It offers French and European cuisine, with a focus on healthy options. The restaurant is praised for its excellent service and ambiance. However, there is limited information available regarding specific weaknesses. Overall, visitors have a very positive experience, highlighting the quality of the food and the welcoming atmosphere."
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "Hilton Grand Vacations Club on the Las Vegas Strip",
+      "rating": 4.4,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

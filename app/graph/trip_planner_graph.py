@@ -9,9 +9,14 @@ from app.nodes.agents.places_node import fetch_attractions, fetch_restaurants
 from app.nodes.agents.itinerary_planner_node import itinerary_planner_node
 from app.nodes.agents.hotel_node import hotel_node
 from app.utils.logger import logger
+from supabase import create_client, Client
+import os
+import json
+import uuid
 
 class GraphState(TypedDict):
     """State for the LangGraph pipeline."""
+    session_id: str  # Add session_id to track state
     query: str
     raw_query: str
     metadata: Dict[str, Any]
@@ -46,6 +51,11 @@ class TripPlannerGraph:
     def __init__(self):
         """Initialize the trip planner graph."""
         self.graph = self._build()
+        # Initialize Supabase client
+        self.supabase: Client = create_client(
+            os.getenv("SUPABASE_URL"),
+            os.getenv("SUPABASE_KEY")
+        )
     
     def _build(self) -> StateGraph:
         """
@@ -74,6 +84,8 @@ class TripPlannerGraph:
             # Get the question from state
             question = state.get("next_question")
             if question:
+                # Save the state before asking the user
+                await self.save_state(state)
                 print("\n" + "="*80)
                 print(question)
                 print("="*80 + "\n")
@@ -83,6 +95,8 @@ class TripPlannerGraph:
                 state["user_response"] = user_response
             # Process the response and get updated state
             updated_state = await process_user_response(state, state.get("user_response", ""))
+            # Save the state after processing response
+            await self.save_state(updated_state)
             # Return the complete updated state
             return updated_state
             
@@ -109,8 +123,11 @@ class TripPlannerGraph:
             }
         )
         
-        # Add edge from process_response back to validator
-        workflow.add_edge("process_response", "validator")
+        # Add edge from process_response to agent_selector instead of back to validator
+        workflow.add_edge("process_response", "agent_selector")
+        
+        # Add edge from agent_selector to validator
+        workflow.add_edge("agent_selector", "validator")
         
         # Add sequential edges for the new flow
         workflow.add_edge("flights_agent", "hotels_agent")  # First get flights, then hotels
@@ -137,6 +154,77 @@ class TripPlannerGraph:
         # Compile the graph
         return workflow.compile()
     
+    async def save_state(self, state: Dict[str, Any]) -> None:
+        """Save the current state to Supabase."""
+        try:
+            # Convert sets to lists for JSON serialization
+            state_to_save = {
+                **state,
+                "visited_places": list(state.get("visited_places", set())),
+                "visited_restaurants": list(state.get("visited_restaurants", set()))
+            }
+            
+            # Convert TripMetadata to dict if present
+            if "metadata" in state_to_save and hasattr(state_to_save["metadata"], "model_dump"):
+                state_to_save["metadata"] = state_to_save["metadata"].model_dump()
+            
+            logger.info(f"Saving state for session {state['session_id']}")
+            logger.debug(f"State content: {json.dumps(state_to_save, indent=2)}")
+            
+            # Save to Supabase
+            self.supabase.table("trip_states").upsert({
+                "session_id": state["session_id"],
+                "state": json.dumps(state_to_save),
+                "updated_at": "now()"
+            }).execute()
+            
+            logger.info("State saved successfully")
+            
+        except Exception as e:
+            logger.error(f"Error saving state to Supabase: {str(e)}")
+            raise
+    
+    async def load_state(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Load the state from Supabase."""
+        try:
+            logger.info(f"Loading state for session {session_id}")
+            
+            response = self.supabase.table("trip_states")\
+                .select("state")\
+                .eq("session_id", session_id)\
+                .order("updated_at", desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if response.data and len(response.data) > 0:
+                state_data = response.data[0]["state"]
+                if isinstance(state_data, str):
+                    state = json.loads(state_data)
+                else:
+                    state = state_data
+                # Recursively convert sets to lists
+                state = self._convert_sets_to_lists(state)
+                logger.info("State loaded successfully")
+                logger.debug(f"Loaded state: {json.dumps(state, indent=2)}")
+                return state
+            logger.info("No existing state found")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error loading state from Supabase: {str(e)}")
+            return None
+
+    def _convert_sets_to_lists(self, obj):
+        """Recursively convert sets to lists in the given object."""
+        if isinstance(obj, set):
+            return list(obj)
+        elif isinstance(obj, dict):
+            return {k: self._convert_sets_to_lists(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_sets_to_lists(item) for item in obj]
+        else:
+            return obj
+    
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a travel query through the graph.
@@ -148,18 +236,31 @@ class TripPlannerGraph:
             Updated state with results or error
         """
         try:
+            # Generate or use existing session_id
+            if "session_id" not in state:
+                state["session_id"] = str(uuid.uuid4())
+            
+            # Load existing state if available
+            existing_state = await self.load_state(state["session_id"])
+            if existing_state:
+                state = {**existing_state, **state}
+            
             # Initialize state for multi-day planning
             state["current_day"] = 1
             state["total_days"] = state.get("metadata", {}).get("duration", 1)
             state["destination"] = state.get("metadata", {}).get("destination", "Unknown")
             state["start_date"] = state.get("metadata", {}).get("start_date", "")
             state["daily_itineraries"] = []
-            state["visited_places"] = set()  # Initialize empty set for visited places
-            state["visited_restaurants"] = set()  # Initialize empty set for visited restaurants
-            state["final_itinerary"] = None  # Initialize final itinerary
+            state["visited_places"] = set()
+            state["visited_restaurants"] = set()
+            state["final_itinerary"] = None
             
-            # Run the graph using ainvoke for async nodes
+            # Run the graph
             result = await self.graph.ainvoke(state)
+            
+            # Save the updated state
+            await self.save_state(result)
+            
             return result
             
         except Exception as e:

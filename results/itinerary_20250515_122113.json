@@ -1,0 +1,195 @@
+{
+  "trip_summary": {
+    "destination": "Paris, France",
+    "start_date": "2024-05-20",
+    "end_date": "2024-05-22",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2024-05-20",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Flight Arrival to Los Angeles (LAX)",
+          "time": "09:00",
+          "duration_minutes": 0,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check-in at The Ritz-Carlton, Los Angeles",
+          "time": "10:00",
+          "duration_minutes": 60,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Mendocino Farms",
+          "time": "12:00",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Los Angeles County Museum of Art",
+          "time": "14:00",
+          "duration_minutes": 180,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "La Brea Tar Pits and Museum",
+          "time": "17:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "The Redwood Bar & Grill",
+          "time": "19:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2024-05-21",
+      "activities": [
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "Breakfast at The Ritz-Carlton, Los Angeles",
+          "time": "08:00",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "California Science Center",
+          "time": "10:00",
+          "duration_minutes": 180,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Extensive hands-on science exhibits and interactive galleries",
+              "Home to the Space Shuttle Endeavour and other significant aerospace artifacts",
+              "Free general admission with engaging educational programs"
+            ],
+            "weaknesses": [
+              "Located in Los Angeles, not Paris, which may cause confusion for travelers"
+            ],
+            "summary": "The California Science Center in Los Angeles is highly praised for its wide range of interactive science exhibits, including aerospace and space exploration artifacts like the Space Shuttle Endeavour. Visitors appreciate the educational value, hands-on experiences, and free admission. However, it is important to note that this attraction is not located in Paris, France, but in Los Angeles, California. There is no California Science Center in Paris, so travelers seeking this attraction in Paris will not find it there."
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Philippe The Original",
+          "time": "13:30",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Walt Disney Concert Hall",
+          "time": "15:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "park",
+          "title": "Gloria Molina Grand Park",
+          "time": "17:00",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Maccheroni Republic",
+          "time": "19:00",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "The Ritz-Carlton, Los Angeles",
+      "rating": 4.6,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}

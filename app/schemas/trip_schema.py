@@ -56,6 +56,16 @@ class TripMetadata(BaseModel):
     num_people: Optional[int] = None
     preferences: List[str] = []
 
+    def model_dump(self, **kwargs):
+        """Convert the model to a dictionary, handling datetime serialization."""
+        data = super().model_dump(**kwargs)
+        # Convert datetime objects to ISO format strings
+        if data.get("start_date"):
+            data["start_date"] = data["start_date"].isoformat()
+        if data.get("end_date"):
+            data["end_date"] = data["end_date"].isoformat()
+        return data
+
 class TripData(BaseModel):
     metadata: TripMetadata
     flights: List[Flight] = []

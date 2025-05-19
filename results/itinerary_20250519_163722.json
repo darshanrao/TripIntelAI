@@ -1,0 +1,294 @@
+{
+  "trip_summary": {
+    "destination": "Paris, France",
+    "start_date": "2024-05-20",
+    "end_date": "2024-05-22",
+    "duration_days": 3,
+    "total_budget": 0
+  },
+  "daily_itinerary": {
+    "day_1": {
+      "date": "2024-05-20",
+      "activities": [
+        {
+          "type": "transportation",
+          "category": "flight",
+          "title": "Arrival at JFK from SFO",
+          "time": "08:15",
+          "duration_minutes": 340,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "transportation",
+          "category": "transportation",
+          "title": "Travel to Hotel",
+          "time": "09:15",
+          "duration_minutes": 60,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "accommodation",
+          "category": "hotel",
+          "title": "Check into Four Seasons Hotel Miami",
+          "time": "10:15",
+          "duration_minutes": 30,
+          "details": {},
+          "review_insights": {}
+        },
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "Breakfast at Hotel",
+          "time": "10:45",
+          "duration_minutes": 60,
+          "details": {
+            "location": "10 Rue de l'Église, 75015 Paris, France",
+            "latitude": 48.8503,
+            "longitude": 2.2945
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Great views from the hotel",
+              "Nice breakfast options including croissants, bread, butter, and jam",
+              "Helpful staff"
+            ],
+            "weaknesses": [
+              "No specific negative points mentioned in the available reviews"
+            ],
+            "summary": "The Paris France Hotel offers a pleasant stay with great views and a satisfying breakfast experience. Guests appreciate the helpful staff and the overall value for the price. The breakfast includes a variety of items such as croissants, bread, butter, and jam, along with unlimited orange juice, coffee, and tea. While there are no specific negative points highlighted in the available reviews, it's important to note that the hotel's amenities and services are generally well-regarded by visitors."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "Vizcaya Museum & Gardens",
+          "time": "12:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch at Novecento",
+          "time": "14:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        },
+        {
+          "type": "attraction",
+          "category": "park",
+          "title": "Peacock Park",
+          "time": "16:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "neutral",
+            "strengths": [
+              "Beautiful natural setting with a variety of trees, plants, and flowers",
+              "Peaceful atmosphere ideal for relaxation and bird watching"
+            ],
+            "weaknesses": [
+              "Limited visitor facilities and amenities"
+            ],
+            "summary": "Peacock Park in Paris is appreciated for its serene environment and natural beauty, featuring diverse flora and fauna including birds such as peacocks. Visitors often highlight the park's peacefulness and suitability for quiet walks and nature observation. However, some reviews note the lack of extensive amenities or attractions within the park, which may limit its appeal for visitors seeking more active or structured recreational options. Overall, the park receives moderate ratings, valued mainly for its calm and green space in the city."
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner at Crazy About You",
+          "time": "19:00",
+          "duration_minutes": 120,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {}
+        }
+      ]
+    },
+    "day_2": {
+      "date": "2024-05-21",
+      "activities": [
+        {
+          "type": "dining",
+          "category": "breakfast",
+          "title": "Breakfast at Hotel",
+          "time": "09:00",
+          "duration_minutes": 60,
+          "details": {
+            "location": "10 Rue de l'Église, 75015 Paris, France",
+            "latitude": 48.8503,
+            "longitude": 2.2945
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Excellent breakfast quality including fresh croissants, bread, butter, and jam",
+              "Pleasant ambiance with natural light and elegant decor such as orchids",
+              "Generous beverage options like orange juice, coffee, and tea"
+            ],
+            "weaknesses": [
+              "Service can be inconsistent, with some reports of lacking attentiveness",
+              "Certain dishes like scrambled eggs received criticism for poor execution"
+            ],
+            "summary": "The breakfast experience at the hotel located at 5 Rue de la Paix in Paris is generally well-regarded by visitors. Guests appreciate the quality and variety of the breakfast offerings, especially the fresh pastries and beverages. The dining area benefits from a bright, elegant atmosphere enhanced by natural light and tasteful decor. However, some reviews note that service quality can vary, and a few specific items such as scrambled eggs were found disappointing. Overall, the breakfast is considered a strong positive aspect of the hotel stay, particularly valued by loyalty members who receive it complimentary, making it a worthwhile experience in Paris."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "museum",
+          "title": "The Louvre Museum",
+          "time": "10:30",
+          "duration_minutes": 180,
+          "details": {
+            "location": "",
+            "latitude": null,
+            "longitude": null
+          },
+          "review_insights": {
+            "sentiment": "",
+            "strengths": [],
+            "weaknesses": [],
+            "summary": ""
+          }
+        },
+        {
+          "type": "dining",
+          "category": "lunch",
+          "title": "Lunch near The Louvre Museum",
+          "time": "13:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "Bistrot Benoit, Niveau -2, Carrousel du Louvre, 75001 Paris, France",
+            "latitude": 48.8603,
+            "longitude": 2.3232
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Delicious French cuisine with a focus on traditional dishes",
+              "Excellent desserts, often highlighted by visitors",
+              "Convenient location under the Louvre's pyramid"
+            ],
+            "weaknesses": [
+              "Some visitors find it a bit pricey for the portion sizes"
+            ],
+            "summary": "Bistrot Benoit is highly regarded for its authentic French dining experience, located conveniently under the Louvre's pyramid. Visitors praise its delicious cuisine, particularly the desserts. While some find it a bit expensive, the overall experience is positive, with many recommending it for a classic French meal. The bistro's location makes it an ideal spot for those visiting the Louvre, offering a comfortable break from sightseeing."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "park",
+          "title": "Tuileries Garden",
+          "time": "15:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "113 Rue de Rivoli, 75001 Paris, France",
+            "latitude": 48.863491,
+            "longitude": 2.327369
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Beautifully maintained gardens with stunning sculptures and fountains",
+              "Excellent location between the Louvre Museum and Place de la Concorde",
+              "Ideal for relaxation and people-watching"
+            ],
+            "weaknesses": [
+              "Can be very crowded, especially during peak tourist seasons",
+              "Limited seating areas for rest"
+            ],
+            "summary": "The Tuileries Garden is highly praised for its picturesque landscape, featuring meticulously maintained lawns, ornamental lakes, and impressive sculptures. Visitors appreciate its central location, making it a perfect spot for both relaxation and exploring nearby attractions like the Louvre. However, it can become quite crowded, and some visitors note a lack of seating areas. Overall, it remains a must-visit attraction in Paris, offering a serene escape amidst the bustling city."
+          }
+        },
+        {
+          "type": "attraction",
+          "category": "attraction",
+          "title": "Arc de Triomphe",
+          "time": "17:30",
+          "duration_minutes": 90,
+          "details": {
+            "location": "Place Charles de Gaulle, 75008 Paris, France",
+            "latitude": 48.8737791,
+            "longitude": 2.29503722603767
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Panoramic views from the top are breathtaking and offer a unique perspective on Paris.",
+              "The historical significance and architectural beauty of the monument are widely appreciated by visitors.",
+              "The location at the center of Place Charles de Gaulle provides easy access to other Parisian attractions."
+            ],
+            "weaknesses": [
+              "Heavy traffic around the monument can make it difficult for pedestrians to access without using the underpasses.",
+              "Some visitors find the climb to the top challenging, especially for those with mobility issues."
+            ],
+            "summary": "The Arc de Triomphe is a highly regarded attraction in Paris, praised for its stunning views from the top and its historical significance. Visitors often comment on the monument's architectural beauty and its strategic location at the end of the Champs-Élysées. While many enjoy the experience, some find the surrounding traffic and the climb to the top to be drawbacks. Overall, it remains a must-visit destination for anyone interested in history and panoramic views of Paris. On TripAdvisor and Google Reviews, it consistently receives high ratings, with many visitors recommending it as a highlight of their Parisian experience."
+          }
+        },
+        {
+          "type": "dining",
+          "category": "dinner",
+          "title": "Dinner near Champs-Élysées",
+          "time": "19:30",
+          "duration_minutes": 120,
+          "details": {
+            "location": "15 Rue de Bassano, 75016 Paris, France",
+            "latitude": 48.8705,
+            "longitude": 2.3017
+          },
+          "review_insights": {
+            "sentiment": "positive",
+            "strengths": [
+              "Creative and original French cuisine with Michelin-star level presentation",
+              "Warm and welcoming atmosphere with attentive service",
+              "Reasonably priced gourmet dining experience near Champs-Élysées"
+            ],
+            "weaknesses": [
+              "Relatively lesser-known, which may make it harder to find or book"
+            ],
+            "summary": "Pleine Terre, located just a few minutes’ walk from the Champs-Élysées, is praised for its creative French dishes and elegant presentation reminiscent of Michelin-star restaurants but at more accessible prices. Reviewers highlight the wood-fire grilled specialties such as leg of lamb and prime rib, and desserts like the banana puff pastry with caramel and vanilla. The restaurant offers a warm, welcoming atmosphere and attentive service, making it a hidden gem for diners seeking quality and originality near the Champs-Élysées. While it is not as widely known as some other venues, this contributes to a more intimate dining experience without the tourist crowds."
+          }
+        }
+      ]
+    }
+  },
+  "review_highlights": {
+    "top_rated_places": [],
+    "top_rated_restaurants": [],
+    "hotel_review_summary": {
+      "name": "Four Seasons Hotel Miami",
+      "rating": 4.7,
+      "strengths": [],
+      "weaknesses": [],
+      "summary": ""
+    },
+    "overall": [],
+    "accommodations": [],
+    "dining": [],
+    "attractions": []
+  }
+}
